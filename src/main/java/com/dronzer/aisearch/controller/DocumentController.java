@@ -32,4 +32,11 @@ public class DocumentController {
 
         return documentService.getAllDocuments();
     }
+
+    @GetMapping("/search")
+    public List<Document> searchDocuments(
+            @RequestParam String keyword) {
+
+        return documentService.searchDocuments(keyword);
+    }
 }

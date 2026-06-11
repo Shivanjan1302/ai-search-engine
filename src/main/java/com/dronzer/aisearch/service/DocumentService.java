@@ -26,4 +26,9 @@ public class DocumentService {
 
         return documentRepository.findAll();
     }
+
+    public List<Document> searchDocuments(String keyword) {
+
+        return documentRepository.findByContentContainingIgnoreCase(keyword);
+    }
 }
