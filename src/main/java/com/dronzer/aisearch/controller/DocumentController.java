@@ -5,6 +5,10 @@ import com.dronzer.aisearch.entity.Document;
 import com.dronzer.aisearch.service.DocumentService;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 import java.util.List;
 
 @RestController
@@ -38,5 +42,21 @@ public class DocumentController {
             @RequestParam String keyword) {
 
         return documentService.searchDocuments(keyword);
+    }
+
+    @PostMapping("/upload")
+    public Document uploadDocument(
+            @RequestParam("file") MultipartFile file)
+            throws IOException {
+
+        String filename = file.getOriginalFilename();
+
+        String content = new String(
+                file.getBytes(),
+                StandardCharsets.UTF_8);
+
+        return documentService.saveDocument(
+                filename,
+                content);
     }
 }
