@@ -9,6 +9,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+
 import java.util.List;
 
 @RestController
@@ -51,9 +55,27 @@ public class DocumentController {
 
         String filename = file.getOriginalFilename();
 
-        String content = new String(
-                file.getBytes(),
-                StandardCharsets.UTF_8);
+        String content;
+
+        if (filename != null &&
+                filename.toLowerCase().endsWith(".pdf")) {
+
+            try (PDDocument pdfDocument =
+                         Loader.loadPDF(file.getBytes())) {
+
+                PDFTextStripper stripper =
+                        new PDFTextStripper();
+
+                content =
+                        stripper.getText(pdfDocument);
+            }
+
+        } else {
+
+            content = new String(
+                    file.getBytes(),
+                    StandardCharsets.UTF_8);
+        }
 
         return documentService.saveDocument(
                 filename,
