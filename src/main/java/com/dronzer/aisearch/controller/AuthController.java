@@ -1,5 +1,6 @@
 package com.dronzer.aisearch.controller;
 
+import com.dronzer.aisearch.dto.LoginRequest;
 import com.dronzer.aisearch.dto.RegisterRequest;
 import com.dronzer.aisearch.service.AuthService;
 import org.springframework.web.bind.annotation.*;
@@ -21,5 +22,12 @@ public class AuthController {
             @RequestBody RegisterRequest request) {
 
         return authService.register(request);
+    }
+
+    @PostMapping("/login")
+    public String login(
+            @RequestBody LoginRequest request) {
+
+        return authService.login(request);
     }
 }
