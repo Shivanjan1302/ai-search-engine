@@ -2,6 +2,7 @@ package com.dronzer.aisearch.service;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -54,5 +55,20 @@ public class JwtService {
 
             return false;
         }
+    }
+
+    public String extractTokenFromRequest(
+            HttpServletRequest request) {
+
+        String authHeader =
+                request.getHeader("Authorization");
+
+        if (authHeader != null &&
+                authHeader.startsWith("Bearer ")) {
+
+            return authHeader.substring(7);
+        }
+
+        return null;
     }
 }

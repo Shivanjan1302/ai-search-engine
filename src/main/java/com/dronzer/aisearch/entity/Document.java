@@ -18,10 +18,17 @@ public class Document {
 
     private LocalDateTime uploadedAt;
 
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+
     public Document() {
     }
 
-    public Document(String filename, String content) {
+    public Document(
+            String filename,
+            String content) {
+
         this.filename = filename;
         this.content = content;
         this.uploadedAt = LocalDateTime.now();
@@ -43,11 +50,25 @@ public class Document {
         return uploadedAt;
     }
 
-    public void setFilename(String filename) {
+    public User getUser() {
+        return user;
+    }
+
+    public void setFilename(
+            String filename) {
+
         this.filename = filename;
     }
 
-    public void setContent(String content) {
+    public void setContent(
+            String content) {
+
         this.content = content;
+    }
+
+    public void setUser(
+            User user) {
+
+        this.user = user;
     }
 }
