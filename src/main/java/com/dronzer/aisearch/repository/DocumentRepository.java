@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
-    List<Document> findByContentContainingIgnoreCase(String keyword);
+    List<Document> findByUserAndContentContainingIgnoreCase(
+            com.dronzer.aisearch.entity.User user,
+            String keyword);
 
 }

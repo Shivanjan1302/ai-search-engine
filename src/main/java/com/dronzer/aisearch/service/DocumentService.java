@@ -68,10 +68,19 @@ public class DocumentService {
     }
 
     public List<Document> searchDocuments(
-            String keyword) {
+            String keyword,
+            String email) {
+
+        User user =
+                userRepository.findByEmail(email)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "User not found"));
 
         return documentRepository
-                .findByContentContainingIgnoreCase(
+                .findByUserAndContentContainingIgnoreCase(
+                        user,
                         keyword);
     }
+
 }

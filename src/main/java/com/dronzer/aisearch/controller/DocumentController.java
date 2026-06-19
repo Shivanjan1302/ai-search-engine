@@ -13,6 +13,8 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 
+import com.dronzer.aisearch.service.JwtService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @RestController
@@ -20,9 +22,14 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final JwtService jwtService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(
+            DocumentService documentService,
+            JwtService jwtService) {
+
         this.documentService = documentService;
+        this.jwtService = jwtService;
     }
 
     @PostMapping
@@ -43,14 +50,25 @@ public class DocumentController {
 
     @GetMapping("/search")
     public List<Document> searchDocuments(
-            @RequestParam String keyword) {
+            @RequestParam String keyword,
+            HttpServletRequest request) {
 
-        return documentService.searchDocuments(keyword);
+        String token =
+                jwtService.extractTokenFromRequest(
+                        request);
+
+        String email =
+                jwtService.extractEmail(token);
+
+        return documentService.searchDocuments(
+                keyword,
+                email);
     }
 
     @PostMapping("/upload")
     public Document uploadDocument(
-            @RequestParam("file") MultipartFile file)
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest request)
             throws IOException {
 
         String filename = file.getOriginalFilename();
@@ -77,8 +95,16 @@ public class DocumentController {
                     StandardCharsets.UTF_8);
         }
 
+        String token =
+                jwtService.extractTokenFromRequest(
+                        request);
+
+        String email =
+                jwtService.extractEmail(token);
+
         return documentService.saveDocument(
                 filename,
-                content);
+                content,
+                email);
     }
 }
