@@ -5,6 +5,7 @@ import com.dronzer.aisearch.entity.User;
 import com.dronzer.aisearch.repository.DocumentRepository;
 import com.dronzer.aisearch.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import com.dronzer.aisearch.dto.DocumentResponse;
 
 import java.util.List;
 
@@ -17,14 +18,18 @@ public class DocumentService {
 
     private final JwtService jwtService;
 
+    private final ChunkService chunkService;
+
     public DocumentService(
             DocumentRepository documentRepository,
             UserRepository userRepository,
-            JwtService jwtService) {
+            JwtService jwtService,
+            ChunkService chunkService){
 
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.jwtService = jwtService;
+        this.chunkService = chunkService;
     }
 
     public Document saveDocument(
@@ -36,8 +41,14 @@ public class DocumentService {
                         filename,
                         content);
 
-        return documentRepository.save(
-                document);
+        Document savedDocument =
+                documentRepository.save(
+                        document);
+
+        chunkService.createChunks(
+                savedDocument);
+
+        return savedDocument;
     }
 
     public Document saveDocument(
@@ -58,8 +69,14 @@ public class DocumentService {
 
         document.setUser(user);
 
-        return documentRepository.save(
-                document);
+        Document savedDocument =
+                documentRepository.save(
+                        document);
+
+        chunkService.createChunks(
+                savedDocument);
+
+        return savedDocument;
     }
 
     public List<Document> getAllDocuments() {
@@ -83,4 +100,13 @@ public class DocumentService {
                         keyword);
     }
 
+    public DocumentResponse toResponse(
+            Document document) {
+
+        return new DocumentResponse(
+                document.getId(),
+                document.getFilename(),
+                document.getUploadedAt()
+        );
+    }
 }

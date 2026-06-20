@@ -2,6 +2,7 @@ package com.dronzer.aisearch.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "documents")
@@ -71,4 +72,7 @@ public class Document {
 
         this.user = user;
     }
+
+    @OneToMany(mappedBy = "document")
+    private List<DocumentChunk> chunks;
 }

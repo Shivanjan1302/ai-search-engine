@@ -1,6 +1,7 @@
 package com.dronzer.aisearch.controller;
 
 import com.dronzer.aisearch.dto.CreateDocumentRequest;
+import com.dronzer.aisearch.dto.DocumentResponse;
 import com.dronzer.aisearch.entity.Document;
 import com.dronzer.aisearch.service.DocumentService;
 import org.springframework.web.bind.annotation.*;
@@ -33,23 +34,29 @@ public class DocumentController {
     }
 
     @PostMapping
-    public Document createDocument(
+    public DocumentResponse createDocument(
             @RequestBody CreateDocumentRequest request) {
 
-        return documentService.saveDocument(
-                request.getFilename(),
-                request.getContent()
-        );
+        Document document =
+                documentService.saveDocument(
+                        request.getFilename(),
+                        request.getContent());
+
+        return documentService.toResponse(document);
     }
 
     @GetMapping
-    public List<Document> getAllDocuments() {
+    public List<DocumentResponse> getAllDocuments() {
 
-        return documentService.getAllDocuments();
+        return documentService
+                .getAllDocuments()
+                .stream()
+                .map(documentService::toResponse)
+                .toList();
     }
 
     @GetMapping("/search")
-    public List<Document> searchDocuments(
+    public List<DocumentResponse> searchDocuments(
             @RequestParam String keyword,
             HttpServletRequest request) {
 
@@ -60,13 +67,17 @@ public class DocumentController {
         String email =
                 jwtService.extractEmail(token);
 
-        return documentService.searchDocuments(
-                keyword,
-                email);
+        return documentService
+                .searchDocuments(
+                        keyword,
+                        email)
+                .stream()
+                .map(documentService::toResponse)
+                .toList();
     }
 
     @PostMapping("/upload")
-    public Document uploadDocument(
+    public DocumentResponse uploadDocument(
             @RequestParam("file") MultipartFile file,
             HttpServletRequest request)
             throws IOException {
@@ -102,9 +113,13 @@ public class DocumentController {
         String email =
                 jwtService.extractEmail(token);
 
-        return documentService.saveDocument(
-                filename,
-                content,
-                email);
+        Document document =
+                documentService.saveDocument(
+                        filename,
+                        content,
+                        email);
+
+        return documentService.toResponse(
+                document);
     }
 }
