@@ -10,10 +10,14 @@ public class ChunkService {
 
     private final DocumentChunkRepository chunkRepository;
 
+    private final EmbeddingService embeddingService;
+
     public ChunkService(
-            DocumentChunkRepository chunkRepository) {
+            DocumentChunkRepository chunkRepository,
+            EmbeddingService embeddingService) {
 
         this.chunkRepository = chunkRepository;
+        this.embeddingService = embeddingService;
     }
 
     public void createChunks(
@@ -52,8 +56,9 @@ public class ChunkService {
             chunk.setDocument(
                     document);
 
-            chunkRepository.save(
-                    chunk);
+            DocumentChunk savedChunk = chunkRepository.save(chunk);
+
+            embeddingService.createEmbedding(savedChunk);
         }
     }
 }

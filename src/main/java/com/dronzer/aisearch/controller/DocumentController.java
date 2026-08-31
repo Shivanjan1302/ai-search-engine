@@ -2,6 +2,8 @@ package com.dronzer.aisearch.controller;
 
 import com.dronzer.aisearch.dto.CreateDocumentRequest;
 import com.dronzer.aisearch.dto.DocumentResponse;
+import com.dronzer.aisearch.dto.ReindexResponse;
+import com.dronzer.aisearch.dto.SemanticSearchResult;
 import com.dronzer.aisearch.entity.Document;
 import com.dronzer.aisearch.service.DocumentService;
 import org.springframework.web.bind.annotation.*;
@@ -76,6 +78,31 @@ public class DocumentController {
                 .toList();
     }
 
+    @GetMapping("/semantic-search")
+    public List<SemanticSearchResult> semanticSearch(
+            @RequestParam String query,
+            @RequestParam(defaultValue = "10") int limit,
+            HttpServletRequest request) {
+
+        if (query.isBlank()) {
+            throw new IllegalArgumentException("query must not be blank");
+        }
+
+        int boundedLimit = Math.min(Math.max(limit, 1), 20);
+        String email = extractEmail(request);
+
+        return documentService.searchSemantically(
+                query,
+                boundedLimit,
+                email);
+    }
+
+    @PostMapping("/reindex")
+    public ReindexResponse reindexDocuments(HttpServletRequest request) {
+        int chunkCount = documentService.reindexDocuments(extractEmail(request));
+        return new ReindexResponse(chunkCount);
+    }
+
     @PostMapping("/upload")
     public DocumentResponse uploadDocument(
             @RequestParam("file") MultipartFile file,
@@ -106,12 +133,7 @@ public class DocumentController {
                     StandardCharsets.UTF_8);
         }
 
-        String token =
-                jwtService.extractTokenFromRequest(
-                        request);
-
-        String email =
-                jwtService.extractEmail(token);
+        String email = extractEmail(request);
 
         Document document =
                 documentService.saveDocument(
@@ -121,5 +143,10 @@ public class DocumentController {
 
         return documentService.toResponse(
                 document);
+    }
+
+    private String extractEmail(HttpServletRequest request) {
+        String token = jwtService.extractTokenFromRequest(request);
+        return jwtService.extractEmail(token);
     }
 }

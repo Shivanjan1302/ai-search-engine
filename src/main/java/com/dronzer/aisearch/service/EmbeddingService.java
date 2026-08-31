@@ -1,20 +1,28 @@
 package com.dronzer.aisearch.service;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.dronzer.aisearch.client.AIClient;
+import com.dronzer.aisearch.entity.DocumentChunk;
+import com.dronzer.aisearch.model.EmbeddingVector;
+import com.dronzer.aisearch.repository.VectorSearchRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 @Service
 public class EmbeddingService {
 
-    private final RestTemplate restTemplate;
+    private final AIClient aiClient;
 
-    @Value("${gemini.api.key}")
-    private String apiKey;
+    private final VectorSearchRepository vectorSearchRepository;
 
     public EmbeddingService(
-            RestTemplate restTemplate) {
+            AIClient aiClient,
+            VectorSearchRepository vectorSearchRepository) {
 
-        this.restTemplate = restTemplate;
+        this.aiClient = aiClient;
+        this.vectorSearchRepository = vectorSearchRepository;
+    }
+
+    public void createEmbedding(DocumentChunk chunk) {
+        EmbeddingVector vector = aiClient.generateDocumentEmbedding(chunk.getChunkText());
+        vectorSearchRepository.upsertEmbedding(chunk.getId(), vector);
     }
 }
