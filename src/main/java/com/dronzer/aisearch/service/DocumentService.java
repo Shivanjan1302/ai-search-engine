@@ -22,8 +22,6 @@ public class DocumentService {
 
     private final UserRepository userRepository;
 
-    private final JwtService jwtService;
-
     private final ChunkService chunkService;
 
     private final DocumentChunkRepository chunkRepository;
@@ -37,7 +35,6 @@ public class DocumentService {
     public DocumentService(
             DocumentRepository documentRepository,
             UserRepository userRepository,
-            JwtService jwtService,
             ChunkService chunkService,
             DocumentChunkRepository chunkRepository,
             EmbeddingService embeddingService,
@@ -46,7 +43,6 @@ public class DocumentService {
 
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
-        this.jwtService = jwtService;
         this.chunkService = chunkService;
         this.chunkRepository = chunkRepository;
         this.embeddingService = embeddingService;
@@ -57,28 +53,13 @@ public class DocumentService {
     @Transactional
     public Document saveDocument(
             String filename,
-            String content) {
-
-        Document document =
-                new Document(
-                        filename,
-                        content);
-
-        Document savedDocument =
-                documentRepository.save(
-                        document);
-
-        chunkService.createChunks(
-                savedDocument);
-
-        return savedDocument;
-    }
-
-    @Transactional
-    public Document saveDocument(
-            String filename,
             String content,
             String email) {
+
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Document content must not be blank");
+        }
 
         User user =
                 userRepository.findByEmail(email)
@@ -103,9 +84,9 @@ public class DocumentService {
         return savedDocument;
     }
 
-    public List<Document> getAllDocuments() {
-
-        return documentRepository.findAll();
+    public List<Document> getDocuments(String email) {
+        User user = findUserByEmail(email);
+        return documentRepository.findByUserOrderByUploadedAtDesc(user);
     }
 
     public List<Document> searchDocuments(
@@ -138,6 +119,7 @@ public class DocumentService {
                 limit);
     }
 
+    @Transactional
     public int reindexDocuments(String email) {
         User user = findUserByEmail(email);
         List<com.dronzer.aisearch.entity.DocumentChunk> chunks =

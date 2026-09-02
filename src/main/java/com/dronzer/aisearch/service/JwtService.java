@@ -2,19 +2,27 @@ package com.dronzer.aisearch.service;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Service
 public class JwtService {
 
-    private final SecretKey secretKey =
-            Keys.hmacShaKeyFor(
-                    "mysecretkeymysecretkeymysecretkey12345"
-                            .getBytes());
+    private final SecretKey secretKey;
+
+    public JwtService(@Value("${jwt.secret}") String secret) {
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException(
+                    "jwt.secret must contain at least 32 bytes");
+        }
+
+        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
+    }
 
     public String generateToken(
             String email) {
@@ -57,18 +65,4 @@ public class JwtService {
         }
     }
 
-    public String extractTokenFromRequest(
-            HttpServletRequest request) {
-
-        String authHeader =
-                request.getHeader("Authorization");
-
-        if (authHeader != null &&
-                authHeader.startsWith("Bearer ")) {
-
-            return authHeader.substring(7);
-        }
-
-        return null;
-    }
 }

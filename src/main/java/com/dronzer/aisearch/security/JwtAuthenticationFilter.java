@@ -53,10 +53,6 @@ public class JwtAuthenticationFilter
             String email =
                     jwtService.extractEmail(token);
 
-            System.out.println(
-                    "Authenticated User: "
-                            + email);
-
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             email,

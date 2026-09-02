@@ -30,4 +30,13 @@ target/
 /.nb-gradle/
 
 ### Local config ###
-src/main/resources/application-local.properties
+src/main/resources/application-*.properties
+!src/main/resources/application.properties
+
+### Environment secrets ###
+.env
+.env.*
+!.env.example
+
+# Local pgvector source
+pgvector/

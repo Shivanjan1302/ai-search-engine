@@ -6,6 +6,7 @@ import com.dronzer.aisearch.dto.ReindexResponse;
 import com.dronzer.aisearch.dto.SemanticSearchResult;
 import com.dronzer.aisearch.entity.Document;
 import com.dronzer.aisearch.service.DocumentService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import org.springframework.web.multipart.MultipartFile;
@@ -16,8 +17,6 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 
-import com.dronzer.aisearch.service.JwtService;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @RestController
@@ -25,33 +24,33 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
-    private final JwtService jwtService;
 
     public DocumentController(
-            DocumentService documentService,
-            JwtService jwtService) {
+            DocumentService documentService) {
 
         this.documentService = documentService;
-        this.jwtService = jwtService;
     }
 
     @PostMapping
     public DocumentResponse createDocument(
-            @RequestBody CreateDocumentRequest request) {
+            @RequestBody CreateDocumentRequest request,
+            @AuthenticationPrincipal String email) {
 
         Document document =
                 documentService.saveDocument(
                         request.getFilename(),
-                        request.getContent());
+                        request.getContent(),
+                        email);
 
         return documentService.toResponse(document);
     }
 
     @GetMapping
-    public List<DocumentResponse> getAllDocuments() {
+    public List<DocumentResponse> getDocuments(
+            @AuthenticationPrincipal String email) {
 
         return documentService
-                .getAllDocuments()
+                .getDocuments(email)
                 .stream()
                 .map(documentService::toResponse)
                 .toList();
@@ -60,14 +59,7 @@ public class DocumentController {
     @GetMapping("/search")
     public List<DocumentResponse> searchDocuments(
             @RequestParam String keyword,
-            HttpServletRequest request) {
-
-        String token =
-                jwtService.extractTokenFromRequest(
-                        request);
-
-        String email =
-                jwtService.extractEmail(token);
+            @AuthenticationPrincipal String email) {
 
         return documentService
                 .searchDocuments(
@@ -82,15 +74,13 @@ public class DocumentController {
     public List<SemanticSearchResult> semanticSearch(
             @RequestParam String query,
             @RequestParam(defaultValue = "10") int limit,
-            HttpServletRequest request) {
+            @AuthenticationPrincipal String email) {
 
         if (query.isBlank()) {
             throw new IllegalArgumentException("query must not be blank");
         }
 
         int boundedLimit = Math.min(Math.max(limit, 1), 20);
-        String email = extractEmail(request);
-
         return documentService.searchSemantically(
                 query,
                 boundedLimit,
@@ -98,15 +88,16 @@ public class DocumentController {
     }
 
     @PostMapping("/reindex")
-    public ReindexResponse reindexDocuments(HttpServletRequest request) {
-        int chunkCount = documentService.reindexDocuments(extractEmail(request));
+    public ReindexResponse reindexDocuments(
+            @AuthenticationPrincipal String email) {
+        int chunkCount = documentService.reindexDocuments(email);
         return new ReindexResponse(chunkCount);
     }
 
     @PostMapping("/upload")
     public DocumentResponse uploadDocument(
             @RequestParam("file") MultipartFile file,
-            HttpServletRequest request)
+            @AuthenticationPrincipal String email)
             throws IOException {
 
         String filename = file.getOriginalFilename();
@@ -133,8 +124,6 @@ public class DocumentController {
                     StandardCharsets.UTF_8);
         }
 
-        String email = extractEmail(request);
-
         Document document =
                 documentService.saveDocument(
                         filename,
@@ -143,10 +132,5 @@ public class DocumentController {
 
         return documentService.toResponse(
                 document);
-    }
-
-    private String extractEmail(HttpServletRequest request) {
-        String token = jwtService.extractTokenFromRequest(request);
-        return jwtService.extractEmail(token);
     }
 }
