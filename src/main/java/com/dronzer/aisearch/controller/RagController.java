@@ -3,6 +3,7 @@ package com.dronzer.aisearch.controller;
 import com.dronzer.aisearch.dto.AskQuestionRequest;
 import com.dronzer.aisearch.dto.RagResponse;
 import com.dronzer.aisearch.service.RagService;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,7 +22,7 @@ public class RagController {
 
     @PostMapping("/ask")
     public RagResponse askQuestion(
-            @RequestBody AskQuestionRequest request,
+            @Valid @RequestBody AskQuestionRequest request,
             @AuthenticationPrincipal String email) {
         return ragService.askQuestion(request.question(), email);
     }

@@ -2,7 +2,7 @@ package com.dronzer.aisearch.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
-public class CreateNoteRequest {
+public class UpdateNoteRequest {
 
     @NotBlank(message = "title must not be blank")
     private String title;

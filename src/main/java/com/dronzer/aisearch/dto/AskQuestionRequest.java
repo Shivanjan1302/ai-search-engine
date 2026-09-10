@@ -1,4 +1,7 @@
 package com.dronzer.aisearch.dto;
 
-public record AskQuestionRequest(String question) {
+import jakarta.validation.constraints.NotBlank;
+
+public record AskQuestionRequest(
+	@NotBlank(message = "question must not be blank") String question) {
 }
