@@ -1,17 +1,21 @@
 package com.dronzer.aisearch.repository;
 
-import com.dronzer.aisearch.entity.Document;
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.util.List;
 
-public interface DocumentRepository extends JpaRepository<Document, Long> {
+import org.springframework.data.repository.Repository;
+
+import com.dronzer.aisearch.entity.Document;
+import com.dronzer.aisearch.entity.User;
+
+public interface DocumentRepository extends Repository<Document, Long> {
+
+    <S extends Document> S save(S document);
 
     List<Document> findByUserOrderByUploadedAtDesc(
-            com.dronzer.aisearch.entity.User user);
+            User user);
 
     List<Document> findByUserAndContentContainingIgnoreCase(
-            com.dronzer.aisearch.entity.User user,
+            User user,
             String keyword);
 
 }

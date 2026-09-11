@@ -1,19 +1,21 @@
 package com.dronzer.aisearch.service;
 
-import com.dronzer.aisearch.entity.Document;
-import com.dronzer.aisearch.entity.User;
-import com.dronzer.aisearch.repository.DocumentRepository;
-import com.dronzer.aisearch.repository.DocumentChunkRepository;
-import com.dronzer.aisearch.repository.UserRepository;
-import com.dronzer.aisearch.repository.VectorSearchRepository;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import com.dronzer.aisearch.dto.DocumentResponse;
-import com.dronzer.aisearch.dto.SemanticSearchResult;
-import com.dronzer.aisearch.client.AIClient;
-import com.dronzer.aisearch.model.EmbeddingVector;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import com.dronzer.aisearch.client.AIClient;
+import com.dronzer.aisearch.dto.DocumentResponse;
+import com.dronzer.aisearch.dto.SemanticSearchResult;
+import com.dronzer.aisearch.entity.Document;
+import com.dronzer.aisearch.entity.User;
+import com.dronzer.aisearch.model.EmbeddingVector;
+import com.dronzer.aisearch.repository.DocumentChunkRepository;
+import com.dronzer.aisearch.repository.DocumentRepository;
+import com.dronzer.aisearch.repository.UserRepository;
+import com.dronzer.aisearch.repository.VectorSearchRepository;
 
 @Service
 public class DocumentService {
@@ -31,6 +33,9 @@ public class DocumentService {
     private final AIClient aiClient;
 
     private final VectorSearchRepository vectorSearchRepository;
+
+        @Value("${app.document.max-content-chars:5000000}")
+        private int maxContentChars = 5000000;
 
     public DocumentService(
             DocumentRepository documentRepository,
@@ -59,6 +64,10 @@ public class DocumentService {
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException(
                     "Document content must not be blank");
+        }
+        if (content.length() > maxContentChars) {
+            throw new IllegalArgumentException(
+                    "Document content exceeds the maximum allowed size");
         }
 
         User user =
@@ -126,7 +135,7 @@ public class DocumentService {
                 chunkRepository.findByDocumentUser(user);
 
         for (com.dronzer.aisearch.entity.DocumentChunk chunk : chunks) {
-            embeddingService.createEmbedding(chunk);
+                        embeddingService.createEmbedding(chunk, user.getId());
         }
 
         return chunks.size();

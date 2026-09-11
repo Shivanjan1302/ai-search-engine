@@ -1,23 +1,24 @@
 package com.dronzer.aisearch.client;
 
-import com.dronzer.aisearch.dto.gemini.EmbeddingRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestTemplate;
-
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
+
+import com.dronzer.aisearch.dto.gemini.EmbeddingRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 class GeminiClientTest {
 
@@ -95,6 +96,25 @@ class GeminiClientTest {
                 restTemplate, "test-key", "https://example.test/embed", "https://example.test/chat");
 
         assertThat(client.generateAnswer("Say hello")).isEqualTo("Hello there");
+    }
+
+    @Test
+    void translatesGeminiTimeoutIntoStableApplicationException() {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        when(restTemplate.exchange(
+                eq("https://example.test/embed"),
+                any(),
+                any(),
+                eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenThrow(new ResourceAccessException("connection timed out"));
+
+        GeminiClient client = new GeminiClient(
+                restTemplate, "test-key", "https://example.test/embed", "https://example.test/chat");
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+                () -> client.generateDocumentEmbedding("A document chunk")))
+                .isInstanceOf(com.dronzer.aisearch.exception.GeminiUpstreamException.class)
+                .hasMessage("Gemini service is temporarily unavailable");
     }
 
     private ObjectNode embeddingResponse() {

@@ -1,7 +1,9 @@
 package com.dronzer.aisearch.repository;
 
-import com.dronzer.aisearch.dto.SemanticSearchResult;
-import com.dronzer.aisearch.model.EmbeddingVector;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -11,10 +13,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import com.dronzer.aisearch.dto.SemanticSearchResult;
+import com.dronzer.aisearch.model.EmbeddingVector;
 
 @EnabledIfEnvironmentVariable(named = "RUN_PGVECTOR_TESTS", matches = "true")
 @Testcontainers(disabledWithoutDocker = true)
@@ -51,8 +51,8 @@ class VectorSearchRepositoryIntegrationTest {
 
     @Test
     void ranksRelevantChunksAndExcludesOtherUsersData() {
-        vectorSearchRepository.upsertEmbedding(100L, vector(1.0f, 0.0f));
-        vectorSearchRepository.upsertEmbedding(200L, vector(1.0f, 0.0f));
+        vectorSearchRepository.upsertEmbedding(100L, 1L, vector(1.0f, 0.0f));
+        vectorSearchRepository.upsertEmbedding(200L, 2L, vector(1.0f, 0.0f));
 
         List<SemanticSearchResult> results = vectorSearchRepository.findSimilar(
                 1L,
@@ -63,6 +63,13 @@ class VectorSearchRepositoryIntegrationTest {
                 .extracting(SemanticSearchResult::documentId)
                 .containsExactly(10L);
         assertThat(results.get(0).similarity()).isGreaterThan(0.9);
+    }
+
+    @Test
+    void cannotUpsertAnEmbeddingForAnotherUsersChunk() {
+        assertThat(vectorSearchRepository.upsertEmbedding(
+                200L, 1L, vector(0.0f, 1.0f)))
+                .isZero();
     }
 
     private static EmbeddingVector vector(float first, float second) {

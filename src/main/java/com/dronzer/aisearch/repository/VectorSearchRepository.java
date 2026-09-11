@@ -1,12 +1,13 @@
 package com.dronzer.aisearch.repository;
 
-import com.dronzer.aisearch.dto.SemanticSearchResult;
-import com.dronzer.aisearch.model.EmbeddingVector;
+import java.util.List;
+import java.util.StringJoiner;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.StringJoiner;
+import com.dronzer.aisearch.dto.SemanticSearchResult;
+import com.dronzer.aisearch.model.EmbeddingVector;
 
 @Repository
 public class VectorSearchRepository {
@@ -19,13 +20,21 @@ public class VectorSearchRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public void upsertEmbedding(Long chunkId, EmbeddingVector embedding) {
-        jdbcTemplate.update("""
-                INSERT INTO document_embeddings (chunk_id, embedding)
-                VALUES (?, CAST(? AS vector))
-                ON CONFLICT (chunk_id)
-                DO UPDATE SET embedding = EXCLUDED.embedding
-                """, chunkId, toVectorLiteral(embedding));
+        public int upsertEmbedding(
+                        Long chunkId,
+                        Long userId,
+                        EmbeddingVector embedding) {
+
+                return jdbcTemplate.update("""
+                                INSERT INTO document_embeddings (chunk_id, embedding)
+                                SELECT c.id, CAST(? AS vector)
+                                FROM document_chunks c
+                                JOIN documents d ON d.id = c.document_id
+                                WHERE c.id = ?
+                                    AND d.user_id = ?
+                                ON CONFLICT (chunk_id)
+                                DO UPDATE SET embedding = EXCLUDED.embedding
+                                """, toVectorLiteral(embedding), chunkId, userId);
     }
 
     public List<SemanticSearchResult> findSimilar(

@@ -64,7 +64,6 @@ class NoteServiceTest {
 
         verify(noteRepository).findByUserOrderByIdAsc(userA);
         verify(noteRepository).findByUserOrderByIdAsc(userB);
-        verify(noteRepository, never()).findAll();
     }
 
     @Test

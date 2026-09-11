@@ -1,23 +1,25 @@
 package com.dronzer.aisearch.client;
 
-import com.dronzer.aisearch.dto.gemini.Content;
-import com.dronzer.aisearch.dto.gemini.EmbeddingRequest;
-import com.dronzer.aisearch.dto.gemini.Part;
-import com.dronzer.aisearch.model.EmbeddingVector;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import com.dronzer.aisearch.dto.gemini.Content;
+import com.dronzer.aisearch.dto.gemini.EmbeddingRequest;
+import com.dronzer.aisearch.dto.gemini.Part;
+import com.dronzer.aisearch.exception.GeminiUpstreamException;
+import com.dronzer.aisearch.model.EmbeddingVector;
 import com.fasterxml.jackson.databind.JsonNode;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 @Component
 public class GeminiClient implements AIClient {
@@ -65,7 +67,7 @@ public class GeminiClient implements AIClient {
         JsonNode parts = body.path("candidates").path(0).path("content").path("parts");
 
         if (!parts.isArray() || parts.isEmpty()) {
-            throw new IllegalStateException("Gemini returned no answer candidates");
+            throw new GeminiUpstreamException();
         }
 
         StringBuilder answer = new StringBuilder();
@@ -77,7 +79,7 @@ public class GeminiClient implements AIClient {
         }
 
         if (answer.isEmpty()) {
-            throw new IllegalStateException("Gemini returned an empty answer");
+            throw new GeminiUpstreamException();
         }
 
         return answer.toString();
@@ -88,14 +90,19 @@ public class GeminiClient implements AIClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("x-goog-api-key", apiKey);
 
-        ResponseEntity<JsonNode> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                new HttpEntity<>(request, headers),
-                JsonNode.class);
+        ResponseEntity<JsonNode> response;
+        try {
+            response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(request, headers),
+                    JsonNode.class);
+        } catch (RestClientException exception) {
+            throw new GeminiUpstreamException();
+        }
 
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-            throw new IllegalStateException("Gemini returned an empty or unsuccessful response");
+            throw new GeminiUpstreamException();
         }
 
         return response.getBody();
@@ -113,8 +120,7 @@ public class GeminiClient implements AIClient {
         JsonNode values = body.path("embedding").path("values");
 
         if (!values.isArray() || values.size() != EMBEDDING_DIMENSIONS) {
-            throw new IllegalStateException(
-                    "Gemini returned an embedding with an unexpected dimension");
+                throw new GeminiUpstreamException();
         }
 
         List<Float> vector = new ArrayList<>(EMBEDDING_DIMENSIONS);
@@ -122,7 +128,7 @@ public class GeminiClient implements AIClient {
 
         for (JsonNode value : values) {
             if (!value.isNumber()) {
-                throw new IllegalStateException("Gemini returned a non-numeric embedding value");
+                throw new GeminiUpstreamException();
             }
 
             float component = value.floatValue();
@@ -131,7 +137,7 @@ public class GeminiClient implements AIClient {
         }
 
         if (squaredMagnitude == 0) {
-            throw new IllegalStateException("Gemini returned a zero-magnitude embedding");
+            throw new GeminiUpstreamException();
         }
 
         double magnitude = Math.sqrt(squaredMagnitude);

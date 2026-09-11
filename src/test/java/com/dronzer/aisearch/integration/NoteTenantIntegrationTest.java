@@ -45,18 +45,18 @@ class NoteTenantIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private NoteRepository noteRepository;
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private NoteRepository noteRepository;
 
     private User userA;
     private User userB;
 
     @BeforeEach
     void setUp() {
-        noteRepository.deleteAll();
-        userRepository.deleteAll();
+        jdbcTemplate.update("DELETE FROM notes");
+        jdbcTemplate.update("DELETE FROM users");
         userA = userRepository.save(user("integration-a@example.test"));
         userB = userRepository.save(user("integration-b@example.test"));
     }
@@ -88,8 +88,8 @@ class NoteTenantIntegrationTest {
                         .with(authenticatedUser(userB.getEmail())))
                 .andExpect(status().isNotFound());
 
-        assertThat(noteRepository.findById(noteA.getId())).isPresent();
-        assertThat(noteRepository.findById(noteA.getId()).orElseThrow().getUser())
+        assertThat(noteRepository.findByIdAndUser(noteA.getId(), userA)).isPresent();
+        assertThat(noteRepository.findByIdAndUser(noteA.getId(), userA).orElseThrow().getUser())
             .extracting(User::getId)
             .isEqualTo(userA.getId());
     }
@@ -124,8 +124,8 @@ class NoteTenantIntegrationTest {
                 .with(authenticatedUser(userB.getEmail())))
             .andExpect(status().isNotFound());
 
-        assertThat(noteRepository.findById(noteA.getId())).isPresent();
-        assertThat(noteRepository.findById(noteB.getId())).isPresent();
+        assertThat(noteRepository.findByIdAndUser(noteA.getId(), userA)).isPresent();
+        assertThat(noteRepository.findByIdAndUser(noteB.getId(), userB)).isPresent();
         }
 
         private Note createNote(String title, String email) throws Exception {

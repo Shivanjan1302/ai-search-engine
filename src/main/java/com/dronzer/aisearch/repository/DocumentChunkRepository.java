@@ -1,16 +1,20 @@
 package com.dronzer.aisearch.repository;
 
-import com.dronzer.aisearch.entity.DocumentChunk;
-import com.dronzer.aisearch.entity.User;
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.util.List;
 
-public interface DocumentChunkRepository
-        extends JpaRepository<DocumentChunk, Long> {
+import org.springframework.data.repository.Repository;
 
-    List<DocumentChunk> findByDocumentId(
-            Long documentId);
+import com.dronzer.aisearch.entity.DocumentChunk;
+import com.dronzer.aisearch.entity.User;
+
+public interface DocumentChunkRepository
+                extends Repository<DocumentChunk, Long> {
+
+        <S extends DocumentChunk> S save(S chunk);
+
+    List<DocumentChunk> findByDocumentIdAndDocumentUser(
+            Long documentId,
+            User user);
 
     List<DocumentChunk> findByDocumentUser(User user);
 }

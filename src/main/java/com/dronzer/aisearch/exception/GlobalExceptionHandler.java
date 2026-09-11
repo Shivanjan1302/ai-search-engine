@@ -8,6 +8,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import com.dronzer.aisearch.dto.ApiErrorResponse;
 
@@ -48,6 +49,47 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
 
         return errorResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleOversizedUpload(
+            MaxUploadSizeExceededException exception,
+            HttpServletRequest request) {
+
+        return errorResponse(HttpStatus.PAYLOAD_TOO_LARGE,
+                "Uploaded file exceeds the maximum allowed size", request);
+    }
+
+    @ExceptionHandler(UploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleApplicationUploadLimit(
+            UploadSizeExceededException exception,
+            HttpServletRequest request) {
+
+        return errorResponse(HttpStatus.PAYLOAD_TOO_LARGE, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UnsupportedDocumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnsupportedDocument(
+            UnsupportedDocumentException exception,
+            HttpServletRequest request) {
+
+        return errorResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(DocumentProcessingException.class)
+    public ResponseEntity<ApiErrorResponse> handleDocumentProcessing(
+            DocumentProcessingException exception,
+            HttpServletRequest request) {
+
+        return errorResponse(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(GeminiUpstreamException.class)
+    public ResponseEntity<ApiErrorResponse> handleGeminiFailure(
+            GeminiUpstreamException exception,
+            HttpServletRequest request) {
+
+        return errorResponse(HttpStatus.BAD_GATEWAY, exception.getMessage(), request);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

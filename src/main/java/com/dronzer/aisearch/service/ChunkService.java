@@ -1,9 +1,12 @@
 package com.dronzer.aisearch.service;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
 import com.dronzer.aisearch.entity.Document;
 import com.dronzer.aisearch.entity.DocumentChunk;
+import com.dronzer.aisearch.entity.User;
 import com.dronzer.aisearch.repository.DocumentChunkRepository;
-import org.springframework.stereotype.Service;
 
 @Service
 public class ChunkService {
@@ -11,6 +14,9 @@ public class ChunkService {
     private final DocumentChunkRepository chunkRepository;
 
     private final EmbeddingService embeddingService;
+
+        @Value("${app.document.max-chunks:10000}")
+        private int maxChunks = 10000;
 
     public ChunkService(
             DocumentChunkRepository chunkRepository,
@@ -23,10 +29,20 @@ public class ChunkService {
     public void createChunks(
             Document document) {
 
+                User owner = document.getUser();
+                if (owner == null || owner.getId() == null) {
+                        throw new IllegalArgumentException("Document owner is required");
+                }
+
         String content =
                 document.getContent();
 
         int chunkSize = 500;
+
+        int chunkCount = (content.length() + chunkSize - 1) / chunkSize;
+        if (chunkCount > maxChunks) {
+                        throw new IllegalArgumentException("Document contains too many chunks");
+        }
 
         int index = 0;
 
@@ -58,7 +74,7 @@ public class ChunkService {
 
             DocumentChunk savedChunk = chunkRepository.save(chunk);
 
-            embeddingService.createEmbedding(savedChunk);
+            embeddingService.createEmbedding(savedChunk, owner.getId());
         }
     }
 }
