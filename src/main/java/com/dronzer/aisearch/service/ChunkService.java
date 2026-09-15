@@ -1,5 +1,7 @@
 package com.dronzer.aisearch.service;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -15,15 +17,19 @@ public class ChunkService {
 
     private final EmbeddingService embeddingService;
 
+        private final DocumentChunker documentChunker;
+
         @Value("${app.document.max-chunks:10000}")
         private int maxChunks = 10000;
 
     public ChunkService(
             DocumentChunkRepository chunkRepository,
-            EmbeddingService embeddingService) {
+                        EmbeddingService embeddingService,
+                        DocumentChunker documentChunker) {
 
         this.chunkRepository = chunkRepository;
         this.embeddingService = embeddingService;
+                this.documentChunker = documentChunker;
     }
 
     public void createChunks(
@@ -37,28 +43,15 @@ public class ChunkService {
         String content =
                 document.getContent();
 
-        int chunkSize = 500;
-
-        int chunkCount = (content.length() + chunkSize - 1) / chunkSize;
+        List<String> chunks = documentChunker.split(content);
+        int chunkCount = chunks.size();
         if (chunkCount > maxChunks) {
                         throw new IllegalArgumentException("Document contains too many chunks");
         }
 
         int index = 0;
 
-        for (int i = 0;
-             i < content.length();
-             i += chunkSize) {
-
-            int end =
-                    Math.min(
-                            i + chunkSize,
-                            content.length());
-
-            String chunkText =
-                    content.substring(
-                            i,
-                            end);
+        for (String chunkText : chunks) {
 
             DocumentChunk chunk =
                     new DocumentChunk();
