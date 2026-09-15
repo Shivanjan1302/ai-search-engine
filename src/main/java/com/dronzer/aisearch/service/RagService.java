@@ -4,19 +4,34 @@ import com.dronzer.aisearch.client.AIClient;
 import com.dronzer.aisearch.dto.RagResponse;
 import com.dronzer.aisearch.dto.RagSource;
 import com.dronzer.aisearch.dto.SemanticSearchResult;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class RagService {
 
-    private static final int RETRIEVAL_LIMIT = 5;
     private static final String NO_RELEVANT_INFORMATION_ANSWER =
             "I could not find relevant information in your documents.";
 
     private final DocumentService documentService;
     private final AIClient aiClient;
+
+    @Value("${app.rag.retrieval-candidate-limit:20}")
+    private int retrievalCandidateLimit = 20;
+
+    @Value("${app.rag.final-context-limit:6}")
+    private int finalContextLimit = 6;
+
+    @Value("${app.rag.similarity-threshold:0.65}")
+    private double similarityThreshold = 0.65;
+
+    @Value("${app.rag.max-chunks-per-document:3}")
+    private int maxChunksPerDocument = 3;
 
     public RagService(DocumentService documentService, AIClient aiClient) {
         this.documentService = documentService;
@@ -30,21 +45,46 @@ public class RagService {
 
         List<SemanticSearchResult> results = documentService.searchSemantically(
                 question,
-                RETRIEVAL_LIMIT,
+                retrievalCandidateLimit,
                 email);
 
-        if (results.isEmpty()) {
+        List<SemanticSearchResult> evidence = selectEvidence(results);
+        if (evidence.isEmpty()) {
             return new RagResponse(NO_RELEVANT_INFORMATION_ANSWER, List.of());
         }
 
-        String prompt = buildPrompt(question, buildContext(results));
+        String prompt = buildPrompt(question, buildContext(evidence));
         String answer = aiClient.generateAnswer(prompt);
 
-        List<RagSource> sources = results.stream()
+        List<RagSource> sources = evidence.stream()
                 .map(this::toSource)
                 .toList();
 
         return new RagResponse(answer, sources);
+    }
+
+    private List<SemanticSearchResult> selectEvidence(List<SemanticSearchResult> results) {
+        Comparator<SemanticSearchResult> ranking = Comparator
+                .comparingDouble(SemanticSearchResult::similarity)
+                .reversed()
+                .thenComparing(SemanticSearchResult::documentId)
+                .thenComparing(SemanticSearchResult::chunkIndex);
+
+        Map<ChunkKey, SemanticSearchResult> uniqueResults = new LinkedHashMap<>();
+        results.stream()
+                .filter(result -> result.similarity() >= similarityThreshold)
+                .sorted(ranking)
+                .forEach(result -> uniqueResults.putIfAbsent(
+                        new ChunkKey(result.documentId(), result.chunkIndex()), result));
+
+        Map<Long, Integer> chunksPerDocument = new LinkedHashMap<>();
+        List<SemanticSearchResult> evidence = uniqueResults.values().stream()
+                .filter(result -> chunksPerDocument.merge(
+                        result.documentId(), 1, Integer::sum) <= maxChunksPerDocument)
+                .limit(finalContextLimit)
+                .toList();
+
+        return evidence;
     }
 
     private String buildContext(List<SemanticSearchResult> results) {
@@ -91,5 +131,8 @@ public class RagService {
                 result.filename(),
                 result.chunkIndex(),
                 result.similarity());
+    }
+
+    private record ChunkKey(Long documentId, Integer chunkIndex) {
     }
 }

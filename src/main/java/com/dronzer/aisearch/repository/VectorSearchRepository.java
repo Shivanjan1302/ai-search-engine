@@ -55,7 +55,7 @@ public class VectorSearchRepository {
                     JOIN documents d ON d.id = c.document_id
                     WHERE d.user_id = ?
                 ) ranked_chunks
-                ORDER BY distance
+                ORDER BY distance, document_id, chunk_index
                 LIMIT ?
                 """, (resultSet, rowNumber) -> new SemanticSearchResult(
                 resultSet.getLong("document_id"),
