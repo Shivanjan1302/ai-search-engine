@@ -1,10 +1,11 @@
 package com.dronzer.aisearch.service;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class DocumentChunkerTest {
 
@@ -74,5 +75,25 @@ class DocumentChunkerTest {
 
         assertThat(second).containsExactlyElementsOf(first);
         assertThat(first).allSatisfy(chunk -> assertThat(chunk).isNotBlank());
+    }
+
+    @Test
+    void rejectsOverlapThatWouldNotAdvanceTheHardSplitWindow() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new DocumentChunker(850, 849))
+                .withMessage("Chunk size must be at least two characters larger than the chunk overlap");
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new DocumentChunker(10, 9))
+                .withMessage("Chunk size must be at least two characters larger than the chunk overlap");
+    }
+
+    @Test
+    @Timeout(10)
+    void stillTerminatesWhenTheOverlapWindowIsTheSmallestAllowed() {
+        List<String> chunks = new DocumentChunker(50, 48).split("word ".repeat(40));
+
+        assertThat(chunks).isNotEmpty();
+        assertThat(chunks).allSatisfy(chunk -> assertThat(chunk.length()).isLessThanOrEqualTo(50));
     }
 }

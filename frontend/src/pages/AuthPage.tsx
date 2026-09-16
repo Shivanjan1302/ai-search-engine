@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { readableError } from '../utils/errors';
@@ -15,6 +15,17 @@ export function AuthPage() {
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('oauth') === 'failed') {
+      setError('Google sign-in was cancelled or could not be completed.');
+    }
+  }, [location.search]);
+
+  function startGoogleLogin() {
+    const backendUrl = import.meta.env.DEV ? 'http://localhost:8080' : (import.meta.env.VITE_API_BASE_URL ?? '');
+    window.location.href = `${backendUrl}/oauth2/authorization/google`;
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setNotice('');
     if (!email.trim() || !email.includes('@')) { setError('Enter a valid email address.'); return; }
@@ -28,5 +39,5 @@ export function AuthPage() {
     finally { setLoading(false); }
   }
 
-  return <main className="auth-page"><Link className="brand auth-brand" to="/"><span className="brand-mark">D</span> dronzer</Link><div className="auth-card"><p className="eyebrow">{isRegister ? 'Start with your knowledge' : 'Welcome back'}</p><h1>{isRegister ? 'Create your workspace.' : 'Sign in to Dronzer.'}</h1><p className="muted">{isRegister ? 'Bring your documents into focus.' : 'Your source-grounded workspace is ready.'}</p>{error && <div className="alert alert-error" role="alert">{error}</div>}{notice && <div className="alert alert-success" role="status">{notice}</div>}<form onSubmit={submit}><label>Email address<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label><label>Password<input type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 6 characters" /></label>{isRegister && <label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={event => setConfirm(event.target.value)} placeholder="Repeat your password" /></label>}<button className="button button-primary full-width" disabled={loading}>{loading ? 'Working...' : isRegister ? 'Create account' : 'Sign in'} <span aria-hidden="true">→</span></button></form><p className="auth-switch">{isRegister ? 'Already have an account?' : 'New to Dronzer?'} <Link to={isRegister ? '/login' : '/register'}>{isRegister ? 'Sign in' : 'Create an account'}</Link></p></div></main>;
+  return <main className="auth-page"><Link className="brand auth-brand" to="/"><span className="brand-mark">D</span> dronzer</Link><div className="auth-card"><p className="eyebrow">{isRegister ? 'Start with your knowledge' : 'Welcome back'}</p><h1>{isRegister ? 'Create your workspace.' : 'Sign in to Dronzer.'}</h1><p className="muted">{isRegister ? 'Bring your documents into focus.' : 'Your source-grounded workspace is ready.'}</p>{error && <div className="alert alert-error" role="alert">{error}</div>}{notice && <div className="alert alert-success" role="status">{notice}</div>}{!isRegister && <button className="button button-google full-width" type="button" onClick={startGoogleLogin}>Continue with Google <span aria-hidden="true">↗</span></button>}{!isRegister && <div className="auth-divider"><span>or use email</span></div>}<form onSubmit={submit}><label>Email address<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label><label>Password<input type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 6 characters" /></label>{isRegister && <label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={event => setConfirm(event.target.value)} placeholder="Repeat your password" /></label>}<button className="button button-primary full-width" disabled={loading}>{loading ? 'Working...' : isRegister ? 'Create account' : 'Sign in'} <span aria-hidden="true">→</span></button></form><p className="auth-switch">{isRegister ? 'Already have an account?' : 'New to Dronzer?'} <Link to={isRegister ? '/login' : '/register'}>{isRegister ? 'Sign in' : 'Create an account'}</Link></p></div></main>;
 }

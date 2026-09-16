@@ -10,13 +10,16 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "dompurify": "^3.4.15",
+    "marked": "^18.0.13",
     "react": "latest",
     "react-dom": "latest",
-    "react-router-dom": "latest"
+    "react-router-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/react": "latest",
     "@types/react-dom": "latest"
   }

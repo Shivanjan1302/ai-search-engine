@@ -9,7 +9,10 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/auth': backendUrl,
+        '/oauth2': backendUrl,
+        '/login/oauth2': backendUrl,
         '/documents': backendUrl,
+        '/search': backendUrl,
         '/rag': backendUrl,
         '/notes': backendUrl,
       },

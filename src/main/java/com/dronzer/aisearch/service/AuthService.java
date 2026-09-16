@@ -3,6 +3,8 @@ package com.dronzer.aisearch.service;
 import com.dronzer.aisearch.dto.LoginRequest;
 import com.dronzer.aisearch.dto.RegisterRequest;
 import com.dronzer.aisearch.entity.User;
+import com.dronzer.aisearch.exception.EmailAlreadyRegisteredException;
+import com.dronzer.aisearch.exception.InvalidCredentialsException;
 import com.dronzer.aisearch.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,55 +30,82 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
-    public String register(
+    public void register(
             RegisterRequest request) {
 
-        if (userRepository.findByEmail(
-                request.getEmail()).isPresent()) {
+        String email = requireEmail(request.getEmail());
+        String password = requirePassword(request.getPassword());
 
-            return "Email already registered";
+        if (userRepository.findByEmail(
+                email).isPresent()) {
+
+            throw new EmailAlreadyRegisteredException();
         }
 
         User user = new User();
 
-        user.setEmail(request.getEmail());
+        user.setEmail(email);
 
         user.setPassword(
-                passwordEncoder.encode(
-                        request.getPassword()));
+                encodePassword(password));
 
         user.setCreatedAt(
                 LocalDateTime.now());
 
         userRepository.save(user);
-
-        return "User registered successfully";
     }
 
     public String login(
             LoginRequest request) {
 
+        String email = requireEmail(request.getEmail());
+        String password = requirePassword(request.getPassword());
+
         User user =
-                userRepository.findByEmail(
-                                request.getEmail())
+                userRepository.findByEmail(email)
                         .orElse(null);
 
-        if (user == null) {
+        if (user == null || user.getPassword() == null) {
 
-            return "Invalid email or password";
+            throw new InvalidCredentialsException();
         }
 
-        boolean matches =
-                passwordEncoder.matches(
-                        request.getPassword(),
-                        user.getPassword());
+        if (!passwordMatches(password, user.getPassword())) {
 
-        if (!matches) {
-
-            return "Invalid email or password";
+            throw new InvalidCredentialsException();
         }
 
         return jwtService.generateToken(
                 user.getEmail());
+    }
+
+    private String requireEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email must not be blank");
+        }
+        return email;
+    }
+
+    private String requirePassword(String password) {
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Password must not be blank");
+        }
+        return password;
+    }
+
+    private String encodePassword(String password) {
+        try {
+            return passwordEncoder.encode(password);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Password could not be processed");
+        }
+    }
+
+    private boolean passwordMatches(String rawPassword, String encodedPassword) {
+        try {
+            return passwordEncoder.matches(rawPassword, encodedPassword);
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 }

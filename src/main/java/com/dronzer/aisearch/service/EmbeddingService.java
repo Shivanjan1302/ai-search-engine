@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 
 import com.dronzer.aisearch.client.AIClient;
 import com.dronzer.aisearch.entity.DocumentChunk;
+import com.dronzer.aisearch.exception.ResourceNotFoundException;
 import com.dronzer.aisearch.model.EmbeddingVector;
 import com.dronzer.aisearch.repository.VectorSearchRepository;
 
@@ -27,7 +28,7 @@ public class EmbeddingService {
         int updatedRows = vectorSearchRepository.upsertEmbedding(
                 chunk.getId(), userId, vector);
         if (updatedRows != 1) {
-            throw new IllegalStateException("Chunk is not owned by the requested user");
+            throw new ResourceNotFoundException("Chunk is not owned by the requested user");
         }
     }
 }

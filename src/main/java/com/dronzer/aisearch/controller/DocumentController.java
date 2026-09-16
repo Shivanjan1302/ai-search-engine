@@ -8,6 +8,7 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,7 +51,7 @@ public class DocumentController {
 
     @PostMapping
     public DocumentResponse createDocument(
-            @RequestBody CreateDocumentRequest request,
+            @Valid @RequestBody CreateDocumentRequest request,
             @AuthenticationPrincipal String email) {
 
         Document document =
@@ -132,10 +133,12 @@ public class DocumentController {
                 if (filename.toLowerCase().endsWith(".pdf")) {
                         try (PDDocument pdfDocument = Loader.loadPDF(file.getBytes())) {
                                 if (pdfDocument.getNumberOfPages() > maxPdfPages) {
-                                        throw new UploadSizeExceededException();
+                                        throw new DocumentProcessingException(
+                                                        "PDF exceeds the maximum allowed page count of "
+                                                                        + maxPdfPages);
                                 }
                                 content = new PDFTextStripper().getText(pdfDocument);
-                        } catch (UploadSizeExceededException exception) {
+                        } catch (DocumentProcessingException exception) {
                                 throw exception;
                         } catch (IOException | RuntimeException exception) {
                                 throw new DocumentProcessingException();

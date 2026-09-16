@@ -1,14 +1,17 @@
-import type { ApiErrorBody, DocumentRecord, NoteRecord, RagResponse, ReindexResponse, SemanticSearchResult } from '../types/api';
+import type { ApiErrorBody, DocumentRecord, LoginResponse, NoteRecord, RagResponse, RegisterResponse, ReindexResponse, SemanticSearchResult, WebSearchResponse } from '../types/api';
 
 const baseUrl = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL ?? '');
+const oauthBaseUrl = import.meta.env.DEV ? 'http://localhost:8080' : baseUrl;
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -32,15 +35,15 @@ async function request<T>(path: string, init: RequestInit = {}, responseType: 'j
   if (!response.ok) {
     let body: ApiErrorBody = {};
     try { body = (await response.json()) as ApiErrorBody; } catch { /* empty error body */ }
-    throw new ApiError(response.status, body.message || response.statusText || 'Something went wrong.');
+    throw new ApiError(response.status, body.message || response.statusText || 'Something went wrong.', body.code ?? undefined);
   }
   if (response.status === 204) return undefined as T;
   return (responseType === 'text' ? await response.text() : await response.json()) as T;
 }
 
 export const api = {
-  login: (email: string, password: string) => request<string>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }, 'text'),
-  register: (email: string, password: string) => request<string>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  login: (email: string, password: string) => request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  register: (email: string, password: string) => request<RegisterResponse>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   documents: () => request<DocumentRecord[]>('/documents'),
   searchDocuments: (keyword: string) => request<DocumentRecord[]>(`/documents/search?keyword=${encodeURIComponent(keyword)}`),
   semanticSearch: (query: string, limit = 10) => request<SemanticSearchResult[]>(`/documents/semantic-search?query=${encodeURIComponent(query)}&limit=${limit}`),
@@ -55,4 +58,10 @@ export const api = {
   updateNote: (id: number, title: string) => request<NoteRecord>(`/notes/${id}`, { method: 'PUT', body: JSON.stringify({ title }) }),
   deleteNote: (id: number) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
   ask: (question: string) => request<RagResponse>('/rag/ask', { method: 'POST', body: JSON.stringify({ question }) }),
+  webSearch: (query: string, limit = 10) => request<WebSearchResponse>(`/search/web?q=${encodeURIComponent(query)}&limit=${limit}`),
+  oauthToken: async () => {
+    const response = await fetch(`${oauthBaseUrl}/auth/oauth-token`, { credentials: 'include' });
+    if (!response.ok) throw new ApiError(response.status, 'Google sign-in could not be completed.');
+    return response.text();
+  },
 };

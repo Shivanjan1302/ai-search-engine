@@ -18,6 +18,9 @@ public class DocumentChunker {
         if (targetChunkSize <= 0 || chunkOverlap < 0 || chunkOverlap >= targetChunkSize) {
             throw new IllegalArgumentException("Chunk size must be positive and overlap must be smaller than chunk size");
         }
+        if (targetChunkSize - chunkOverlap - 1 < 1) {
+            throw new IllegalArgumentException("Chunk size must be at least two characters larger than the chunk overlap");
+        }
         this.targetChunkSize = targetChunkSize;
         this.chunkOverlap = chunkOverlap;
     }
@@ -89,7 +92,7 @@ public class DocumentChunker {
         }
 
         List<String> pieces = new ArrayList<>();
-        int pieceSize = targetChunkSize - chunkOverlap - 1;
+        int pieceSize = Math.max(1, targetChunkSize - chunkOverlap - 1);
         for (int start = 0; start < text.length(); start += pieceSize) {
             pieces.add(text.substring(start, Math.min(start + pieceSize, text.length())));
         }

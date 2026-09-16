@@ -11,6 +11,7 @@ import com.dronzer.aisearch.dto.DocumentResponse;
 import com.dronzer.aisearch.dto.SemanticSearchResult;
 import com.dronzer.aisearch.entity.Document;
 import com.dronzer.aisearch.entity.User;
+import com.dronzer.aisearch.exception.ResourceNotFoundException;
 import com.dronzer.aisearch.model.EmbeddingVector;
 import com.dronzer.aisearch.repository.DocumentChunkRepository;
 import com.dronzer.aisearch.repository.DocumentRepository;
@@ -73,7 +74,7 @@ public class DocumentService {
         User user =
                 userRepository.findByEmail(email)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "User not found"));
 
         Document document =
@@ -105,7 +106,7 @@ public class DocumentService {
         User user =
                 userRepository.findByEmail(email)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "User not found"));
 
         return documentRepository
@@ -153,6 +154,6 @@ public class DocumentService {
 
     private User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 }

@@ -1,12 +1,5 @@
 package com.dronzer.aisearch.evaluation;
 
-import com.dronzer.aisearch.client.AIClient;
-import com.dronzer.aisearch.dto.RagResponse;
-import com.dronzer.aisearch.dto.SemanticSearchResult;
-import com.dronzer.aisearch.service.DocumentService;
-import com.dronzer.aisearch.service.RagService;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,10 +7,17 @@ import java.util.List;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.dronzer.aisearch.client.AIClient;
+import com.dronzer.aisearch.dto.RagResponse;
+import com.dronzer.aisearch.dto.SemanticSearchResult;
+import com.dronzer.aisearch.service.DocumentService;
+import com.dronzer.aisearch.service.RagService;
 
 /**
  * Deterministic evaluation of Phase 1 evidence selection and answer grounding.

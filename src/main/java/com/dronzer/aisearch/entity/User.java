@@ -16,8 +16,14 @@ public class User {
             unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
+
+    @Column(name = "auth_provider")
+    private String authProvider;
+
+    @Column(name = "google_subject", unique = true)
+    private String googleSubject;
 
     private LocalDateTime createdAt;
 
@@ -51,6 +57,22 @@ public class User {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getAuthProvider() {
+        return authProvider;
+    }
+
+    public void setAuthProvider(String authProvider) {
+        this.authProvider = authProvider;
+    }
+
+    public String getGoogleSubject() {
+        return googleSubject;
+    }
+
+    public void setGoogleSubject(String googleSubject) {
+        this.googleSubject = googleSubject;
     }
 
     public LocalDateTime getCreatedAt() {
