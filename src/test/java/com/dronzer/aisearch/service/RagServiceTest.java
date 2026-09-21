@@ -1,6 +1,7 @@
 package com.dronzer.aisearch.service;
 
 import com.dronzer.aisearch.client.AIClient;
+import com.dronzer.aisearch.client.WebSearchClient;
 import com.dronzer.aisearch.dto.RagResponse;
 import com.dronzer.aisearch.dto.SemanticSearchResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,12 +22,13 @@ class RagServiceTest {
 
     private final DocumentService documentService = mock(DocumentService.class);
     private final AIClient aiClient = mock(AIClient.class);
+    private final WebSearchClient webSearchClient = mock(WebSearchClient.class);
 
     private RagService ragService;
 
     @BeforeEach
     void setUp() {
-        ragService = new RagService(documentService, aiClient);
+        ragService = new RagService(documentService, aiClient, webSearchClient);
     }
 
     @Test
@@ -53,14 +55,13 @@ class RagServiceTest {
 
     @Test
     void rejectsWeakResultsAndKeepsStrongResults() {
-        SemanticSearchResult strong = result(10L, 0, 0.80, "Strong evidence.");
-        SemanticSearchResult weak = result(20L, 0, 0.64, "Weak evidence.");
         when(documentService.searchSemantically("What is RAG?", 20, "user@example.test"))
-                .thenReturn(List.of(weak, strong));
+                .thenReturn(List.of(
+                        result(20L, 0, 0.64, "Weak evidence."),
+                        result(10L, 0, 0.80, "Strong evidence.")));
         when(aiClient.generateAnswer(anyString())).thenReturn("Grounded answer.");
 
         RagResponse response = ragService.askQuestion("What is RAG?", "user@example.test");
-
         assertThat(response.sources())
                 .extracting(com.dronzer.aisearch.dto.RagSource::documentId)
                 .containsExactly(10L);

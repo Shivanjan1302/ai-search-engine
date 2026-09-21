@@ -25,7 +25,7 @@ public class RagService {
     private static final int MAX_WEB_RESULTS = 20;
     private static final int MAX_WEB_SNIPPET_LENGTH = 2000;
 
-    private final DocumentService documentService;
+    private final HybridRetrievalService hybridRetrievalService;
     private final AIClient aiClient;
     private final WebSearchClient webSearchClient;
 
@@ -44,21 +44,62 @@ public class RagService {
     @Value("${app.rag.similarity-threshold:0.65}")
     private double similarityThreshold = 0.65;
 
+    /**
+     * Minimum normalized keyword relevance for a keyword-only candidate
+     * ({@code similarity == null}) to be admitted as evidence. The semantic
+     * similarity threshold ({@code similarityThreshold}) applies only to
+     * candidates that carry a cosine similarity; keyword-only candidates have
+     * no semantic score to judge against that threshold, so they are evaluated
+     * against this keyword relevance threshold instead.
+     *
+     * <p>The default 0.5 means a keyword-only candidate must be at least half
+     * as relevant as the strongest keyword hit in the batch (see
+     * {@link HybridCandidateMerger} normalization) to surface. This keeps the
+     * keyword backstop permissive enough to rescue exact matches (error codes,
+     * identifiers, names) while still filtering out very weak full-text noise.
+     */
+    @Value("${app.rag.keyword-threshold:0.5}")
+    private double keywordThreshold = 0.5;
+
     @Value("${app.rag.max-chunks-per-document:3}")
     private int maxChunksPerDocument = 3;
 
+    /**
+     * Spring-managed constructor for production. Wires the real hybrid retrieval
+     * pipeline; document scoping and tenant isolation are handled inside
+     * {@link HybridRetrievalService} and {@code KeywordSearchRepository}.
+     */
     @Autowired
     public RagService(
-            DocumentService documentService,
+            HybridRetrievalService hybridRetrievalService,
             AIClient aiClient,
             WebSearchClient webSearchClient) {
-        this.documentService = documentService;
+        this.hybridRetrievalService = hybridRetrievalService;
         this.aiClient = aiClient;
         this.webSearchClient = webSearchClient;
     }
 
-    public RagService(DocumentService documentService, AIClient aiClient) {
-        this(documentService, aiClient, (query, limit) -> List.of());
+    /**
+     * Semantic-only convenience constructor kept for backwards compatibility with
+     * existing unit tests that supply a {@link DocumentService} directly. The
+     * resulting {@link HybridRetrievalService} runs keyword search disabled, so the
+     * retrieval behaviour is identical to Phase 1.
+     */
+    public RagService(
+            DocumentService documentService,
+            AIClient aiClient) {
+        this(new HybridRetrievalService(documentService), aiClient, (query, limit) -> List.of());
+    }
+
+    /**
+     * Semantic-only convenience constructor (with an explicit web search client) kept
+     * for backwards compatibility with existing unit tests.
+     */
+    public RagService(
+            DocumentService documentService,
+            AIClient aiClient,
+            WebSearchClient webSearchClient) {
+        this(new HybridRetrievalService(documentService), aiClient, webSearchClient);
     }
 
     public RagResponse askQuestion(String question, String email) {
@@ -66,7 +107,7 @@ public class RagService {
             throw new IllegalArgumentException("question must not be blank");
         }
 
-        List<SemanticSearchResult> results = documentService.searchSemantically(
+        List<SemanticSearchResult> results = hybridRetrievalService.retrieve(
                 question,
                 retrievalCandidateLimit,
                 email);
@@ -106,15 +147,30 @@ public class RagService {
     }
 
     private List<SemanticSearchResult> selectEvidence(List<SemanticSearchResult> results) {
+        // Phase 2A: rank by the weighted hybrid score (computed upstream by the
+        // HybridRanker), falling back to documentId/chunkIndex for deterministic
+        // ties. This replaces the Phase 1 similarity-only ordering while remaining
+        // backward compatible: when keyword search is disabled the hybrid score is
+        // seeded with the cosine similarity, so ordering is identical to Phase 1.
         Comparator<SemanticSearchResult> ranking = Comparator
-                .comparingDouble(SemanticSearchResult::similarity)
+                .comparingDouble(SemanticSearchResult::hybridScore)
                 .reversed()
                 .thenComparing(SemanticSearchResult::documentId)
                 .thenComparing(SemanticSearchResult::chunkIndex);
 
         Map<ChunkKey, SemanticSearchResult> uniqueResults = new LinkedHashMap<>();
         results.stream()
-                .filter(result -> result.similarity() >= similarityThreshold)
+                // The semantic similarity threshold applies ONLY to chunks that carry a
+                // real semantic score. A keyword-only chunk (similarity == null) has no
+                // semantic score, so it must survive the threshold on its own keyword
+                // relevance; it is later ranked by its hybrid score.
+                .filter(result -> {
+                    if (result.similarity() != null) {
+                        return result.similarity() >= similarityThreshold;
+                    } else {
+                        return result.keywordScore() >= keywordThreshold;
+                    }
+                })
                 .sorted(ranking)
                 .forEach(result -> uniqueResults.putIfAbsent(
                         new ChunkKey(result.documentId(), result.chunkIndex()), result));
@@ -168,11 +224,16 @@ public class RagService {
     }
 
     private RagSource toSource(SemanticSearchResult result) {
+        // Keyword-only chunks have no semantic cosine, so the exposed similarity is
+        // 0.0: the genuine absence of a semantic match, never the keyword relevance.
+        double semanticSimilarity = result.similarity() == null ? 0.0 : result.similarity();
         return new RagSource(
                 result.documentId(),
                 result.filename(),
                 result.chunkIndex(),
-                result.similarity());
+                semanticSimilarity,
+                result.keywordScore(),
+                result.hybridScore());
     }
 
     private record ChunkKey(Long documentId, Integer chunkIndex) {
