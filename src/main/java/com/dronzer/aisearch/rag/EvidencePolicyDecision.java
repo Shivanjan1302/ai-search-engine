@@ -2,46 +2,44 @@ package com.dronzer.aisearch.rag;
 
 import com.dronzer.aisearch.dto.KnowledgeSource;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The decision produced by an evidence policy evaluation.
+ * The deterministic decision produced by an {@link EvidencePolicy}.
  *
- * <p>This is a shared contract type used by {@link EvidencePolicy} and
- * {@link ProvenanceAssembler}. It is defined as a top-level record so that
- * {@link ProvenanceAssembler} can reference it without depending on the
- * enclosing declaration of {@link EvidencePolicy}.</p>
+ * <p>{@code sourcesWithEvidence} contains only retrieved evidence sources.
+ * MODEL_KNOWLEDGE is represented independently by {@code modelKnowledgeAllowed}.</p>
  */
 public record EvidencePolicyDecision(
-        /**
-         * Whether the policy considers the evidence sufficient for generation.
-         */
         boolean sufficient,
-
-        /**
-         * A reason describing the decision.
-         */
         String reason,
-
-        /**
-         * Which sources contributed useful evidence.
-         */
         List<KnowledgeSource> sourcesWithEvidence,
-
-        /**
-         * Whether any required source was unavailable.
-         */
         boolean requiredSourceUnavailable,
-
-        /**
-         * Whether there is evidence of source conflict.
-         */
         boolean conflictDetected,
-
-        /**
-         * Optional metadata about the evidence coverage, such as counts
-         * per source or coverage percentages.
-         */
-        Optional<String> coverageSummary
+        Optional<String> coverageSummary,
+        boolean modelKnowledgeAllowed
 ) {
+    public EvidencePolicyDecision(
+            boolean sufficient,
+            String reason,
+            List<KnowledgeSource> sourcesWithEvidence,
+            boolean requiredSourceUnavailable,
+            boolean conflictDetected,
+            Optional<String> coverageSummary
+    ) {
+        this(sufficient, reason, sourcesWithEvidence, requiredSourceUnavailable,
+                conflictDetected, coverageSummary, false);
+    }
+
+    public EvidencePolicyDecision {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("reason must not be blank");
+        }
+        if (coverageSummary == null) {
+            throw new IllegalArgumentException("coverageSummary must not be null");
+        }
+        sourcesWithEvidence = List.copyOf(Objects.requireNonNull(
+                sourcesWithEvidence, "sourcesWithEvidence must not be null"));
+    }
 }

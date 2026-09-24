@@ -244,10 +244,11 @@ public final class DefaultSourcePlanner implements SourcePlanner {
     }
 
     private static SourceRequirement modelRequirement(boolean allowed, String reason) {
-        return allowed
+        SourceRequirement requirement = allowed
                 ? SourceRequirement.optional(KnowledgeSource.MODEL_KNOWLEDGE, reason)
                 : SourceRequirement.optional(KnowledgeSource.MODEL_KNOWLEDGE,
                         reason + " [currently disallowed by plan policy]");
+        return requirement.withPermitted(allowed);
     }
 
     private static String effectiveText(InterpretedQuery query) {
