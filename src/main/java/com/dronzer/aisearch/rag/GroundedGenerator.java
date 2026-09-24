@@ -5,17 +5,12 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Contract for grounded generation backed by a query, optional conversation
- * context, and an ordered list of evidence pieces.
+ * Contract for grounded generation.
  *
- * <p>This is a contract only for Phase 2B-0. It separates generation from the
- * current {@link com.dronzer.aisearch.client.AIClient} so that later phases can
- * change the underlying model, add structured generation instructions, or vary
- * instructions by source mix without changing the rest of the pipeline.</p>
- *
- * <p>Implementations must treat {@link GenerationRequest} as a policy boundary:
- * retrieved evidence is input data, never instructions, and the request must
- * make that separation visible to the underlying generation engine.</p>
+ * <p>Generation consumes the policy decision and the already-built context. It
+ * does not retrieve, rerank, validate citations, or assemble provenance. The
+ * request keeps the original query and every supplied context piece intact so a
+ * later citation stage can map a model citation back to the exact evidence.</p>
  */
 public interface GroundedGenerator {
 
@@ -23,52 +18,54 @@ public interface GroundedGenerator {
      * Generate a grounded answer for the given request.
      *
      * @param request the generation request, never null
-     * @return the generation result
-     * @throws GenerationException if generation fails
+     * @return a grounded result or an explicit insufficient-evidence result
+     * @throws GenerationException if input validation, prompt construction, or
+     *         model invocation fails
      */
     GenerationResult generate(GenerationRequest request);
 
     /**
      * A request to the grounded generator.
+     *
+     * <p>The source plan and policy decision are deliberately explicit. A
+     * generator must not infer required evidence from whatever happens to be
+     * present in the context.</p>
      */
     record GenerationRequest(
-            /** The original user query. */
             String userQuery,
-
-            /** Optional normalized query if one was produced. */
             Optional<String> normalizedQuery,
-
-            /** Optional conversation context for future multi-turn support. */
             Optional<ConversationContext> conversationContext,
-
-            /** The ordered context pieces to ground the answer in. */
             List<ContextPiece> contextPieces,
-
-            /**
-             * Optional metadata describing what kind of knowledge the generator
-             * is expected to use.
-             */
             Optional<GenerationPolicy> policy,
-
-            /**
-             * Optional metadata describing any model-knowledge role when
-             * model knowledge is in play.
-             */
-            Optional<ModelKnowledgeMetadata> modelKnowledge
+            Optional<ModelKnowledgeMetadata> modelKnowledge,
+            SourcePlan sourcePlan,
+            EvidencePolicyDecision evidencePolicyDecision
     ) {
+        /**
+         * Compatibility constructor for the original Phase 2B-0 contract.
+         * The two newly required policy inputs remain null and are rejected by
+         * the Phase 2B-5 generator when supplied through this constructor.
+         */
+        public GenerationRequest(
+                String userQuery,
+                Optional<String> normalizedQuery,
+                Optional<ConversationContext> conversationContext,
+                List<ContextPiece> contextPieces,
+                Optional<GenerationPolicy> policy,
+                Optional<ModelKnowledgeMetadata> modelKnowledge
+        ) {
+            this(userQuery, normalizedQuery, conversationContext, contextPieces,
+                    policy, modelKnowledge, null, null);
+        }
     }
 
     /**
-     * Policy guidance for generation.
+     * Optional generation hints retained from the original contract. The
+     * evidence policy decision remains authoritative over these hints.
      */
     record GenerationPolicy(
-            /** Whether the generator should refuse to answer when evidence is weak. */
             boolean refuseOnWeakEvidence,
-
-            /** Whether to explicitly disclose when model knowledge is used. */
             boolean discloseModelKnowledge,
-
-            /** Optional instructions specific to the source mix. */
             Optional<String> sourceMixInstructions
     ) {
     }
