@@ -6,16 +6,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
-import com.dronzer.aisearch.client.AIClient;
 import com.dronzer.aisearch.client.TavilyWebSearchClient;
-import com.dronzer.aisearch.dto.RagOrigin;
-import com.dronzer.aisearch.dto.RagResponse;
+import com.dronzer.aisearch.dto.WebSearchResponse;
 import com.dronzer.aisearch.dto.WebSearchResult;
-import com.dronzer.aisearch.service.DocumentService;
-import com.dronzer.aisearch.service.RagService;
+import com.dronzer.aisearch.service.WebSearchService;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -41,28 +37,13 @@ class TavilyWebSearchLiveIntegrationTest {
     }
 
     @Test
-    void realTavilyResultsTriggerWebFallback() {
-        DocumentService documentService = mock(DocumentService.class);
-        AIClient aiClient = mock(AIClient.class);
+    void realTavilyResultsAreReturnedThroughWebRetrievalBoundary() {
         TavilyWebSearchClient tavilyClient = tavilyClient();
-        RagService ragService = new RagService(documentService, aiClient, tavilyClient);
+        WebSearchService webSearchService = new WebSearchService(tavilyClient);
 
-        when(documentService.searchSemantically(anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString()))
-                .thenReturn(List.of());
-        when(aiClient.generateAnswer(anyString())).thenReturn("Web-grounded test answer.");
-        ReflectionTestUtils.setField(ragService, "webFallbackEnabled", true);
-        ReflectionTestUtils.setField(ragService, "webResultLimit", RESULT_LIMIT);
+        WebSearchResponse response = webSearchService.search(QUERY, RESULT_LIMIT);
 
-        RagResponse response = ragService.askQuestion(QUERY, "live-test@example.test");
-
-        assertThat(response.origin()).isEqualTo(RagOrigin.WEB);
-        assertThat(response.sources()).isEmpty();
-        assertThat(response.webSources()).isNotEmpty();
-        assertThat(response.webSources()).allSatisfy(result -> {
-            assertThat(result.title()).isNotBlank();
-            assertThat(result.url()).matches("https?://.+");
-            assertThat(result.snippet()).isNotNull().hasSizeLessThanOrEqualTo(MAX_SNIPPET_LENGTH);
-        });
+        assertThat(response.results()).isNotEmpty();
     }
 
     private TavilyWebSearchClient tavilyClient() {

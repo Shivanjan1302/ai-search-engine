@@ -42,9 +42,27 @@ public record WebEvidence(
          * Retrieval metadata such as the search provider name or query
          * context. May be null.
          */
-        String retrievalMethod
+        String retrievalMethod,
+
+        /** Existing web response metadata retained for backward-compatible mapping. */
+        String domain,
+        String path,
+        String breadcrumb,
+        String publishedDate
 
 ) implements Evidence {
+
+    /** Compatibility constructor for the original six-field evidence contract. */
+    public WebEvidence(
+            String url,
+            String title,
+            String publisher,
+            String content,
+            Double retrievalScore,
+            String retrievalMethod) {
+        this(url, title, publisher, content, retrievalScore, retrievalMethod,
+                null, null, null, null);
+    }
 
     @Override
     public KnowledgeSource source() {

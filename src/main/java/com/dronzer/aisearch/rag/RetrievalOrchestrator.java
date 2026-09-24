@@ -128,6 +128,8 @@ public final class RetrievalOrchestrator {
 
     private final HybridRetrievalService documentRetrieval;
     private final WebSearchService webRetrieval;
+    private final int documentCandidateLimit;
+    private final int webResultLimit;
 
     public RetrievalOrchestrator(
             HybridRetrievalService documentRetrieval,
@@ -135,6 +137,8 @@ public final class RetrievalOrchestrator {
         this.documentRetrieval = Objects.requireNonNull(
                 documentRetrieval, "documentRetrieval must not be null");
         this.webRetrieval = Objects.requireNonNull(webRetrieval, "webRetrieval must not be null");
+        this.documentCandidateLimit = DEFAULT_DOCUMENT_CANDIDATE_LIMIT;
+        this.webResultLimit = DEFAULT_WEB_RESULT_LIMIT;
     }
 
     /**
@@ -255,12 +259,12 @@ public final class RetrievalOrchestrator {
 
     private List<SemanticSearchResult> retrieveDocuments(String retrievalQuery, String email) {
         List<SemanticSearchResult> results = documentRetrieval.retrieve(
-                retrievalQuery, DEFAULT_DOCUMENT_CANDIDATE_LIMIT, email);
+                retrievalQuery, documentCandidateLimit, email);
         return results == null ? List.of() : results;
     }
 
     private List<WebSearchResult> retrieveWebResults(String retrievalQuery) {
-        WebSearchResponse response = webRetrieval.search(retrievalQuery, DEFAULT_WEB_RESULT_LIMIT);
+        WebSearchResponse response = webRetrieval.search(retrievalQuery, webResultLimit);
         if (response == null || response.results() == null) {
             return List.of();
         }

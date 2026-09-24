@@ -48,7 +48,11 @@ public final class WebRetrievalAdapter {
                 result.publisher(),
                 result.snippet(),
                 null,
-                "web"
+                "web",
+                result.domain(),
+                result.path(),
+                result.breadcrumb(),
+                result.publishedDate()
         );
     }
 }
