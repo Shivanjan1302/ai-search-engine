@@ -19,7 +19,7 @@ public record InterpretedQuery(
         /** The original user question, exactly as received. */
         String originalQuery,
 
-        /** An optional normalized/standalone form produced by a future query rewriter. */
+        /** An optional normalized/standalone form produced only by confident interpretation. */
         Optional<String> normalizedQuery,
 
         /** A future classification of what the query is asking for. */
@@ -52,15 +52,22 @@ public record InterpretedQuery(
         /** Whether the query is expected to need more than one source type. */
         Optional<Boolean> mixedSource,
 
-        /** Optional conversation context for future multi-turn handling. */
-        Optional<ConversationContext> conversationContext
+        /** Optional request-local conversation context. */
+        Optional<ConversationContext> conversationContext,
+
+        /** Optional untrusted, request-local filename references awaiting ownership validation. */
+        Optional<DocumentContext> documentContext,
+
+        /** Whether the query was unchanged, confidently resolved, or ambiguous. */
+        InterpretationStatus interpretationStatus
 
 ) {
 
     public InterpretedQuery(String originalQuery) {
         this(originalQuery, Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.empty(), Optional.empty());
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                InterpretationStatus.UNCHANGED);
     }
 
     /**
@@ -68,33 +75,32 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withIntent(QueryIntent intent) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                Optional.of(intent),
-                documentSpecific,
-                requiresFreshness,
-                freshnessHorizon,
-                webRequired,
-                modelKnowledgeAllowed,
-                mixedSource,
-                conversationContext);
+                originalQuery, normalizedQuery, Optional.of(intent), documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                mixedSource, conversationContext, documentContext, interpretationStatus);
     }
 
     /**
-     * Build a copy with an adjusted normalized query.
+     * Build a copy with an adjusted normalized query. A normalized query is
+     * produced only by an explicit resolution operation.
      */
     public InterpretedQuery withNormalizedQuery(String normalized) {
         return new InterpretedQuery(
-                originalQuery,
-                Optional.of(normalized),
-                intent,
-                documentSpecific,
-                requiresFreshness,
-                freshnessHorizon,
-                webRequired,
-                modelKnowledgeAllowed,
-                mixedSource,
-                conversationContext);
+                originalQuery, Optional.of(normalized), intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                mixedSource, conversationContext, documentContext, InterpretationStatus.RESOLVED);
+    }
+
+    /**
+     * Return the query form intended for planning and retrieval.
+     * The original wording is the safe fallback for standalone questions.
+     */
+    public String retrievalQuery() {
+        return interpretationStatus == InterpretationStatus.RESOLVED
+                ? normalizedQuery
+                        .filter(value -> !value.isBlank())
+                        .orElse(originalQuery)
+                : originalQuery;
     }
 
     /**
@@ -102,16 +108,17 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withConversationContext(ConversationContext context) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                intent,
-                documentSpecific,
-                requiresFreshness,
-                freshnessHorizon,
-                webRequired,
-                modelKnowledgeAllowed,
-                mixedSource,
-                Optional.of(context));
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                mixedSource, Optional.of(context), documentContext, interpretationStatus);
+    }
+
+    /** Build a copy with a request-local, untrusted document reference attached. */
+    public InterpretedQuery withDocumentContext(DocumentContext context) {
+        return new InterpretedQuery(
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                mixedSource, conversationContext, Optional.of(context), interpretationStatus);
     }
 
     /**
@@ -121,16 +128,9 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withDocumentSpecific(boolean documentSpecific) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                intent,
-                Optional.of(documentSpecific),
-                requiresFreshness,
-                freshnessHorizon,
-                webRequired,
-                modelKnowledgeAllowed,
-                mixedSource,
-                conversationContext);
+                originalQuery, normalizedQuery, intent, Optional.of(documentSpecific),
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                mixedSource, conversationContext, documentContext, interpretationStatus);
     }
 
     /**
@@ -138,16 +138,10 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withRequiresFreshness(boolean requiresFreshness) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                intent,
-                documentSpecific,
-                Optional.of(requiresFreshness),
-                freshnessHorizon,
-                webRequired,
-                modelKnowledgeAllowed,
-                mixedSource,
-                conversationContext);
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                Optional.of(requiresFreshness), freshnessHorizon, webRequired,
+                modelKnowledgeAllowed, mixedSource, conversationContext,
+                documentContext, interpretationStatus);
     }
 
     /**
@@ -155,16 +149,10 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withWebRequired(boolean webRequired) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                intent,
-                documentSpecific,
-                requiresFreshness,
-                freshnessHorizon,
-                Optional.of(webRequired),
-                modelKnowledgeAllowed,
-                mixedSource,
-                conversationContext);
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, Optional.of(webRequired),
+                modelKnowledgeAllowed, mixedSource, conversationContext,
+                documentContext, interpretationStatus);
     }
 
     /**
@@ -172,16 +160,10 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withModelKnowledgeAllowed(boolean modelKnowledgeAllowed) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                intent,
-                documentSpecific,
-                requiresFreshness,
-                freshnessHorizon,
-                webRequired,
-                Optional.of(modelKnowledgeAllowed),
-                mixedSource,
-                conversationContext);
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired,
+                Optional.of(modelKnowledgeAllowed), mixedSource, conversationContext,
+                documentContext, interpretationStatus);
     }
 
     /**
@@ -189,16 +171,18 @@ public record InterpretedQuery(
      */
     public InterpretedQuery withMixedSource(boolean mixedSource) {
         return new InterpretedQuery(
-                originalQuery,
-                normalizedQuery,
-                intent,
-                documentSpecific,
-                requiresFreshness,
-                freshnessHorizon,
-                webRequired,
-                modelKnowledgeAllowed,
-                Optional.of(mixedSource),
-                conversationContext);
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                Optional.of(mixedSource), conversationContext, documentContext,
+                interpretationStatus);
+    }
+
+    /** Build a copy with an explicit interpretation status. */
+    public InterpretedQuery withInterpretationStatus(InterpretationStatus status) {
+        return new InterpretedQuery(
+                originalQuery, normalizedQuery, intent, documentSpecific,
+                requiresFreshness, freshnessHorizon, webRequired, modelKnowledgeAllowed,
+                mixedSource, conversationContext, documentContext, status);
     }
 
     /**

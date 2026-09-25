@@ -1,4 +1,4 @@
-import type { ApiErrorBody, DocumentRecord, LoginResponse, NoteRecord, RagResponse, RegisterResponse, ReindexResponse, SemanticSearchResult, WebSearchResponse } from '../types/api';
+import type { ApiErrorBody, ConversationTurn, DocumentRecord, LoginResponse, NoteRecord, RagResponse, RegisterResponse, ReindexResponse, SemanticSearchResult, WebSearchResponse } from '../types/api';
 
 const baseUrl = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL ?? '');
 const oauthBaseUrl = import.meta.env.DEV ? 'http://localhost:8080' : baseUrl;
@@ -57,7 +57,7 @@ export const api = {
   createNote: (title: string) => request<NoteRecord>('/notes', { method: 'POST', body: JSON.stringify({ title }) }),
   updateNote: (id: number, title: string) => request<NoteRecord>(`/notes/${id}`, { method: 'PUT', body: JSON.stringify({ title }) }),
   deleteNote: (id: number) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
-  ask: (question: string) => request<RagResponse>('/rag/ask', { method: 'POST', body: JSON.stringify({ question }) }),
+  ask: (question: string, recentTurns: ConversationTurn[] = []) => request<RagResponse>('/rag/ask', { method: 'POST', body: JSON.stringify({ question, recentTurns }) }),
   webSearch: (query: string, limit = 10) => request<WebSearchResponse>(`/search/web?q=${encodeURIComponent(query)}&limit=${limit}`),
   oauthToken: async () => {
     const response = await fetch(`${oauthBaseUrl}/auth/oauth-token`, { credentials: 'include' });

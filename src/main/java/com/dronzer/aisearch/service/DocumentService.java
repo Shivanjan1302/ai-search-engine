@@ -1,6 +1,7 @@
 package com.dronzer.aisearch.service;
 
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -119,14 +120,24 @@ public class DocumentService {
             String query,
             int limit,
             String email) {
+        return searchSemantically(query, limit, email, Set.of());
+    }
+
+    /** Semantic retrieval constrained to already-validated document IDs for this email. */
+    public List<SemanticSearchResult> searchSemantically(
+            String query,
+            int limit,
+            String email,
+            Set<Long> documentIds) {
 
         User user = findUserByEmail(email);
         EmbeddingVector queryEmbedding = aiClient.generateQueryEmbedding(query);
-
+        if (documentIds == null || documentIds.isEmpty()) {
+            return vectorSearchRepository.findSimilar(
+                    user.getId(), queryEmbedding, limit);
+        }
         return vectorSearchRepository.findSimilar(
-                user.getId(),
-                queryEmbedding,
-                limit);
+                user.getId(), queryEmbedding, limit, documentIds);
     }
 
     @Transactional

@@ -10,18 +10,22 @@ export interface NoteRecord {
 }
 
 export interface RagSource {
-  documentId: number;
-  filename: string;
-  chunkIndex: number;
+  documentId: number | null;
+  filename: string | null;
+  chunkIndex: number | null;
   similarity: number;
+  keywordScore: number;
+  hybridScore: number;
 }
 
 export interface SemanticSearchResult {
-  documentId: number;
-  filename: string;
-  chunkIndex: number;
-  chunkText: string;
-  similarity: number;
+  documentId: number | null;
+  filename: string | null;
+  chunkIndex: number | null;
+  chunkText: string | null;
+  similarity: number | null;
+  keywordScore: number;
+  hybridScore: number;
 }
 
 export interface ReindexResponse {
@@ -35,13 +39,23 @@ export interface RagResponse {
   origin: RagOrigin;
 }
 
-export type RagOrigin = 'DOCUMENTS' | 'WEB' | 'DOCUMENTS_AND_WEB' | 'INSUFFICIENT_EVIDENCE';
+export interface ConversationTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  sourceFilenames?: string[];
+}
+
+export type RagOrigin = 'DOCUMENTS' | 'WEB' | 'MODEL_KNOWLEDGE' | 'MIXED' | 'INSUFFICIENT_EVIDENCE';
 
 export interface WebSearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-  publisher: string;
+  title: string | null;
+  url: string | null;
+  snippet: string | null;
+  publisher: string | null;
+  domain: string | null;
+  path: string | null;
+  breadcrumb: string | null;
+  publishedDate: string | null;
 }
 
 export interface WebSearchResponse {

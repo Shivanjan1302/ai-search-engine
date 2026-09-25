@@ -4,6 +4,8 @@ import com.dronzer.aisearch.dto.KnowledgeSource;
 import com.dronzer.aisearch.dto.SemanticSearchResult;
 import com.dronzer.aisearch.dto.WebSearchResponse;
 import com.dronzer.aisearch.dto.WebSearchResult;
+import com.dronzer.aisearch.query.DocumentContextResolution;
+import com.dronzer.aisearch.query.DocumentContextResolver;
 import com.dronzer.aisearch.query.InterpretedQuery;
 import com.dronzer.aisearch.service.HybridRetrievalService;
 import com.dronzer.aisearch.service.WebSearchService;
@@ -46,13 +48,11 @@ import java.util.Objects;
  * HTTP client, never reads API keys, and never changes request format or result
  * semantics. Results are converted exclusively through {@link WebRetrievalAdapter}.
  *
- * <h2>Query handling (documented decision)</h2>
- * The retrieval query is always {@link InterpretedQuery#originalQuery()}, passed through
- * verbatim — the user's query is never mutated. {@code normalizedQuery} is <em>not</em>
- * used: its contract defines it only as "an optional normalized/standalone form produced
- * by a future query rewriter", not as the retrieval query, and no rewriter populates it
- * in production. When a rewriter lands and the contract explicitly designates the
- * normalized form as the retrieval query, this decision can be revisited in one place.
+ * <h2>Query handling</h2>
+ * The retrieval query is {@link InterpretedQuery#retrievalQuery()}: the normalized
+ * standalone form when interpretation supplied one, otherwise the original wording.
+ * The original wording remains available on the interpreted query for generation
+ * and provenance.
  *
  * <h2>Optional-source execution semantics (documented decision)</h2>
  * OPTIONAL does <em>not</em> mean "always execute". The deterministic rule, derived only
@@ -128,15 +128,26 @@ public final class RetrievalOrchestrator {
 
     private final HybridRetrievalService documentRetrieval;
     private final WebSearchService webRetrieval;
+    private final DocumentContextResolver documentContextResolver;
     private final int documentCandidateLimit;
     private final int webResultLimit;
 
     public RetrievalOrchestrator(
             HybridRetrievalService documentRetrieval,
             WebSearchService webRetrieval) {
+        this(documentRetrieval, webRetrieval, (query, email) ->
+                DocumentContextResolution.noScope());
+    }
+
+    public RetrievalOrchestrator(
+            HybridRetrievalService documentRetrieval,
+            WebSearchService webRetrieval,
+            DocumentContextResolver documentContextResolver) {
         this.documentRetrieval = Objects.requireNonNull(
                 documentRetrieval, "documentRetrieval must not be null");
         this.webRetrieval = Objects.requireNonNull(webRetrieval, "webRetrieval must not be null");
+        this.documentContextResolver = Objects.requireNonNull(
+                documentContextResolver, "documentContextResolver must not be null");
         this.documentCandidateLimit = DEFAULT_DOCUMENT_CANDIDATE_LIMIT;
         this.webResultLimit = DEFAULT_WEB_RESULT_LIMIT;
     }
@@ -145,7 +156,7 @@ public final class RetrievalOrchestrator {
      * Execute the plan's retrieval decisions and collect deduplicated evidence.
      *
      * @param plan  the source plan to honour, never null
-     * @param query the interpreted query; {@code originalQuery} is the retrieval query
+     * @param query the interpreted query; its normalized form is used when present
      * @param email the authenticated user's email, passed unchanged to the existing
      *              tenant-aware document retrieval layer
      * @return a deterministic, deduplicated evidence collection
@@ -164,7 +175,7 @@ public final class RetrievalOrchestrator {
             throw new IllegalArgumentException("email must not be blank");
         }
 
-        final String retrievalQuery = query.originalQuery();
+        final String retrievalQuery = query.retrievalQuery();
 
         Map<KnowledgeSource, RequirementLevel> resolved = resolveExecutionSet(plan);
 
@@ -189,8 +200,14 @@ public final class RetrievalOrchestrator {
             executedSources.add(source);
             try {
                 if (source == KnowledgeSource.DOCUMENT) {
+                    DocumentContextResolution context = documentContextResolver.resolve(query, email);
+                    if (context.status() == DocumentContextResolution.Status.UNAVAILABLE) {
+                        documentLevel = level;
+                        unavailableSources.add(source);
+                        continue;
+                    }
                     documents = deduplicate(DocumentRetrievalAdapter.fromResults(
-                            retrieveDocuments(retrievalQuery, email)));
+                            retrieveDocuments(retrievalQuery, email, context.documentIds())));
                     documentLevel = level;
                 } else {
                     webEvidence = deduplicate(WebRetrievalAdapter.fromResults(
@@ -257,9 +274,12 @@ public final class RetrievalOrchestrator {
     // Retrieval delegates (existing services only; no direct I/O here).
     // ------------------------------------------------------------------
 
-    private List<SemanticSearchResult> retrieveDocuments(String retrievalQuery, String email) {
-        List<SemanticSearchResult> results = documentRetrieval.retrieve(
-                retrievalQuery, documentCandidateLimit, email);
+    private List<SemanticSearchResult> retrieveDocuments(
+            String retrievalQuery, String email, java.util.Set<Long> documentIds) {
+        List<SemanticSearchResult> results = documentIds.isEmpty()
+                ? documentRetrieval.retrieve(retrievalQuery, documentCandidateLimit, email)
+                : documentRetrieval.retrieve(
+                        retrievalQuery, documentCandidateLimit, email, documentIds);
         return results == null ? List.of() : results;
     }
 

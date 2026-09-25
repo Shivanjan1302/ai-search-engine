@@ -5,7 +5,10 @@ import com.dronzer.aisearch.dto.RagOrigin;
 import com.dronzer.aisearch.dto.RagResponse;
 import com.dronzer.aisearch.dto.RagSource;
 import com.dronzer.aisearch.dto.WebSearchResult;
+import com.dronzer.aisearch.query.ConversationContext;
+import com.dronzer.aisearch.query.DefaultQueryInterpreter;
 import com.dronzer.aisearch.query.InterpretedQuery;
+import com.dronzer.aisearch.query.QueryInterpretationService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +25,7 @@ public final class ProductionRagPipeline {
     static final String INSUFFICIENT_EVIDENCE_ANSWER =
             "I could not find relevant information in your documents.";
 
+    private final QueryInterpretationService queryInterpretationService;
     private final SourcePlanner sourcePlanner;
     private final RetrievalOrchestrator retrievalOrchestrator;
     private final Reranker reranker;
@@ -40,6 +44,23 @@ public final class ProductionRagPipeline {
             GroundedGenerator groundedGenerator,
             CitationValidator citationValidator,
             ProvenanceAssembler provenanceAssembler) {
+        this(new DefaultQueryInterpreter(), sourcePlanner, retrievalOrchestrator,
+                reranker, contextBuilder, evidencePolicy, groundedGenerator,
+                citationValidator, provenanceAssembler);
+    }
+
+    public ProductionRagPipeline(
+            QueryInterpretationService queryInterpretationService,
+            SourcePlanner sourcePlanner,
+            RetrievalOrchestrator retrievalOrchestrator,
+            Reranker reranker,
+            ContextBuilder contextBuilder,
+            EvidencePolicy evidencePolicy,
+            GroundedGenerator groundedGenerator,
+            CitationValidator citationValidator,
+            ProvenanceAssembler provenanceAssembler) {
+        this.queryInterpretationService = Objects.requireNonNull(
+                queryInterpretationService, "queryInterpretationService must not be null");
         this.sourcePlanner = Objects.requireNonNull(sourcePlanner, "sourcePlanner must not be null");
         this.retrievalOrchestrator = Objects.requireNonNull(
                 retrievalOrchestrator, "retrievalOrchestrator must not be null");
@@ -55,14 +76,23 @@ public final class ProductionRagPipeline {
     }
 
     public PipelineResult execute(String question, String email) {
+        return execute(question, email, Optional.empty());
+    }
+
+    public PipelineResult execute(
+            String question, String email, Optional<ConversationContext> conversationContext) {
         if (question == null || question.isBlank()) {
             throw new IllegalArgumentException("question must not be blank");
         }
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("email must not be blank");
         }
+        if (conversationContext == null) {
+            throw new IllegalArgumentException("conversationContext must not be null");
+        }
 
-        InterpretedQuery interpretedQuery = new InterpretedQuery(question);
+        InterpretedQuery interpretedQuery = queryInterpretationService.interpret(
+                question, conversationContext);
         SourcePlan sourcePlan = sourcePlanner.plan(interpretedQuery);
         RetrievalResult retrieval = retrievalOrchestrator.retrieve(
                 sourcePlan, interpretedQuery, email);

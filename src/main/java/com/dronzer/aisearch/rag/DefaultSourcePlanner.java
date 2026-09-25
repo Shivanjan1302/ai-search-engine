@@ -50,7 +50,8 @@ public final class DefaultSourcePlanner implements SourcePlanner {
             Pattern.compile("\\b(according to|based on|in) (my|our|the) (document|documents|doc|docs|file|files|notes?|report|policy|policies|contract|handbook|wiki)\\b"),
             Pattern.compile("\\bwhat does (my|our|the) (document|documents|doc|docs|file|files|notes?|report|policy|policies)\\b"),
             Pattern.compile("\\b(summari[sz]e|summarise) (my|our|this|that|the) (document|documents|doc|file|files|notes?|report|policy|pdf)\\b"),
-            Pattern.compile("\\b(this|that) (document|file|pdf|report|policy|contract)\\b"));
+            Pattern.compile("\\b(this|that) (document|file|pdf|report|policy|contract)\\b"),
+            Pattern.compile("\\b(this|that) contract\\b"));
 
     /** Phrases suggesting the query needs current/external information. */
     private static final List<Pattern> FRESHNESS_PATTERNS = List.of(
@@ -252,11 +253,7 @@ public final class DefaultSourcePlanner implements SourcePlanner {
     }
 
     private static String effectiveText(InterpretedQuery query) {
-        String normalized = query.normalizedQuery().orElse(null);
-        String text = (normalized != null && !normalized.isBlank())
-                ? normalized
-                : query.originalQuery();
-        return text.toLowerCase(Locale.ROOT);
+        return query.retrievalQuery().toLowerCase(Locale.ROOT);
     }
 
     private static boolean matchesAny(String text, List<Pattern> patterns) {

@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.Collections;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,6 +53,76 @@ class RagControllerSecurityTest {
                 .andExpect(jsonPath("$.answer").value("It retrieves relevant context."));
 
         verify(ragService).askQuestion(eq("What is RAG?"), eq("user@example.test"));
+    }
+
+    @Test
+    void authenticatedValidConversationReachesServiceWithUnchangedTenant() throws Exception {
+        when(ragService.askQuestion(eq("What about termination?"), eq("user@example.test"), any()))
+                .thenReturn(new RagResponse("Answered", Collections.emptyList()));
+
+        mockMvc.perform(post("/rag/ask")
+                        .with(authenticatedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"What about termination?\",\"recentTurns\":["
+                                + "{\"role\":\"user\",\"content\":\"What are the risks?\"},"
+                                + "{\"role\":\"assistant\",\"content\":\"The risks are...\"}]}"))
+                .andExpect(status().isOk());
+
+        verify(ragService).askQuestion(eq("What about termination?"), eq("user@example.test"),
+                any());
+    }
+
+    @Test
+    void authenticatedNullOrEmptyRecentTurnsUsesLegacyNoContextPath() throws Exception {
+        when(ragService.askQuestion("What is RAG?", "user@example.test"))
+                .thenReturn(new RagResponse("Answered", Collections.emptyList()));
+
+        mockMvc.perform(post("/rag/ask")
+                        .with(authenticatedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"What is RAG?\",\"recentTurns\":[]}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/rag/ask")
+                        .with(authenticatedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"What is RAG?\",\"recentTurns\":null}"))
+                .andExpect(status().isOk());
+
+        verify(ragService, org.mockito.Mockito.times(2))
+                .askQuestion("What is RAG?", "user@example.test");
+    }
+
+    @Test
+    void malformedConversationIsRejectedAsBadRequest() throws Exception {
+        assertConversationBadRequest("{\"question\":\"Q\",\"recentTurns\":[null]}",
+                "recentTurns must not contain null turns");
+        assertConversationBadRequest("{\"question\":\"Q\",\"recentTurns\":[{\"role\":\" \",\"content\":\"c\"}]}",
+                "role must not be blank");
+        assertConversationBadRequest("{\"question\":\"Q\",\"recentTurns\":[{\"role\":\"system\",\"content\":\"c\"}]}",
+                "role must be user or assistant");
+        assertConversationBadRequest("{\"question\":\"Q\",\"recentTurns\":[{\"role\":\"user\",\"content\":\" \"}]}",
+                "content must not be blank");
+    }
+
+    @Test
+    void excessiveConversationIsRejectedAsBadRequest() throws Exception {
+        String turns = "{\"role\":\"user\",\"content\":\"c\"}";
+        String body = "{\"question\":\"Q\",\"recentTurns\":["
+                + String.join(",", java.util.Collections.nCopies(11, turns)) + "]}";
+        assertConversationBadRequest(body, "recentTurns must not exceed 10 turns");
+
+        String oversized = "{\"question\":\"Q\",\"recentTurns\":[{\"role\":\"user\",\"content\":\""
+                + "x".repeat(2_001) + "\"}]}";
+        assertConversationBadRequest(oversized, "content must not exceed 2000 characters");
+    }
+
+    private void assertConversationBadRequest(String body, String message) throws Exception {
+        mockMvc.perform(post("/rag/ask")
+                        .with(authenticatedUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(message));
     }
 
     @Test

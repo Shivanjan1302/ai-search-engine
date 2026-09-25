@@ -1,6 +1,7 @@
 package com.dronzer.aisearch.repository;
 
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -54,8 +55,7 @@ public class KeywordSearchRepository {
         if (query == null || query.isBlank() || limit <= 0) {
             return List.of();
         }
-        return jdbcTemplate.query(
-                """
+        return jdbcTemplate.query("""
                 SELECT d.id AS document_id,
                        d.filename,
                        c.chunk_index,
@@ -76,5 +76,69 @@ public class KeywordSearchRepository {
                         resultSet.getString("chunk_text"),
                         resultSet.getDouble("keyword_score")),
                 query, userId, query, limit);
+    }
+
+    /** Tenant-scoped keyword retrieval with an optional trusted document constraint. */
+    public List<KeywordSearchResult> findMatches(
+            Long userId,
+            String query,
+            int limit,
+            java.util.Set<Long> documentIds) {
+        if (query == null || query.isBlank() || limit <= 0) {
+            return List.of();
+        }
+        if (documentIds == null || documentIds.isEmpty()) {
+            return jdbcTemplate.query("""
+                    SELECT d.id AS document_id,
+                           d.filename,
+                           c.chunk_index,
+                           c.chunk_text,
+                           ts_rank_cd(to_tsvector('english', c.chunk_text),
+                                      plainto_tsquery('english', ?)) AS keyword_score
+                    FROM document_chunks c
+                    JOIN documents d ON d.id = c.document_id
+                    WHERE d.user_id = ?
+                      AND to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', ?)
+                    ORDER BY keyword_score DESC, document_id ASC, chunk_index ASC
+                    LIMIT ?
+                    """,
+                    (resultSet, rowNumber) -> new KeywordSearchResult(
+                            resultSet.getLong("document_id"),
+                            resultSet.getString("filename"),
+                            resultSet.getInt("chunk_index"),
+                            resultSet.getString("chunk_text"),
+                            resultSet.getDouble("keyword_score")),
+                    query, userId, query, limit);
+        }
+        String placeholders = String.join(", ", java.util.Collections.nCopies(documentIds.size(), "?"));
+        String documentFilter = " AND d.id IN (" + placeholders + ")";
+        java.util.List<Object> arguments = new java.util.ArrayList<>();
+        arguments.add(query);
+        arguments.add(userId);
+        arguments.add(query);
+        arguments.addAll(documentIds);
+        arguments.add(limit);
+        return jdbcTemplate.query("""
+                SELECT d.id AS document_id,
+                       d.filename,
+                       c.chunk_index,
+                       c.chunk_text,
+                       ts_rank_cd(to_tsvector('english', c.chunk_text),
+                                  plainto_tsquery('english', ?)) AS keyword_score
+                FROM document_chunks c
+                JOIN documents d ON d.id = c.document_id
+                WHERE d.user_id = ?
+                  AND to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', ?)
+                """ + documentFilter + """
+                ORDER BY keyword_score DESC, document_id ASC, chunk_index ASC
+                LIMIT ?
+                """,
+                (resultSet, rowNumber) -> new KeywordSearchResult(
+                        resultSet.getLong("document_id"),
+                        resultSet.getString("filename"),
+                        resultSet.getInt("chunk_index"),
+                        resultSet.getString("chunk_text"),
+                        resultSet.getDouble("keyword_score")),
+                arguments.toArray());
     }
 }

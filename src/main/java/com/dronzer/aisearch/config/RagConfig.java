@@ -1,6 +1,9 @@
 package com.dronzer.aisearch.config;
 
 import com.dronzer.aisearch.client.AIClient;
+import com.dronzer.aisearch.query.DefaultQueryInterpreter;
+import com.dronzer.aisearch.query.DocumentContextResolver;
+import com.dronzer.aisearch.query.QueryInterpretationService;
 import com.dronzer.aisearch.rag.AIClientGenerationModel;
 import com.dronzer.aisearch.rag.CitationValidator;
 import com.dronzer.aisearch.rag.ContextBuilder;
@@ -34,10 +37,17 @@ public class RagConfig {
     }
 
     @Bean
+    QueryInterpretationService queryInterpretationService() {
+        return new DefaultQueryInterpreter();
+    }
+
+    @Bean
     RetrievalOrchestrator retrievalOrchestrator(
             HybridRetrievalService documentRetrieval,
-            WebSearchService webRetrieval) {
-        return new RetrievalOrchestrator(documentRetrieval, webRetrieval);
+            WebSearchService webRetrieval,
+            DocumentContextResolver documentContextResolver) {
+        return new RetrievalOrchestrator(
+                documentRetrieval, webRetrieval, documentContextResolver);
     }
 
     @Bean
@@ -77,6 +87,7 @@ public class RagConfig {
 
     @Bean
     ProductionRagPipeline productionRagPipeline(
+            QueryInterpretationService queryInterpretationService,
             SourcePlanner sourcePlanner,
             RetrievalOrchestrator retrievalOrchestrator,
             Reranker reranker,
@@ -86,6 +97,7 @@ public class RagConfig {
             CitationValidator citationValidator,
             ProvenanceAssembler provenanceAssembler) {
         return new ProductionRagPipeline(
+                queryInterpretationService,
                 sourcePlanner, retrievalOrchestrator, reranker, contextBuilder,
                 evidencePolicy, groundedGenerator, citationValidator, provenanceAssembler);
     }

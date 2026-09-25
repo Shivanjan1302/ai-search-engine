@@ -6,6 +6,7 @@ import com.dronzer.aisearch.dto.WebSearchResponse;
 import com.dronzer.aisearch.dto.WebSearchResult;
 import com.dronzer.aisearch.exception.WebSearchUpstreamException;
 import com.dronzer.aisearch.query.InterpretedQuery;
+import com.dronzer.aisearch.query.InterpretationStatus;
 import com.dronzer.aisearch.service.HybridRetrievalService;
 import com.dronzer.aisearch.service.WebSearchService;
 import java.lang.reflect.Constructor;
@@ -456,10 +457,24 @@ class RetrievalOrchestratorTest {
     @Test
     void orchestrator_andAdapters_haveNoProviderOrDatabaseDependencies() {
         Constructor<?>[] constructors = RetrievalOrchestrator.class.getConstructors();
-        assertEquals(1, constructors.length);
-        assertArrayEquals(
-                new Class<?>[]{HybridRetrievalService.class, WebSearchService.class},
-                constructors[0].getParameterTypes());
+        assertEquals(2, constructors.length);
+        assertTrue(constructors[0].getParameterCount() == 2
+                || constructors[1].getParameterCount() == 2);
+        assertTrue(constructors[0].getParameterCount() == 3
+                || constructors[1].getParameterCount() == 3);
+        for (Constructor<?> constructor : constructors) {
+            Class<?>[] parameters = constructor.getParameterTypes();
+            if (parameters.length == 2) {
+                assertArrayEquals(
+                        new Class<?>[]{HybridRetrievalService.class, WebSearchService.class},
+                        parameters);
+            } else {
+                assertArrayEquals(
+                        new Class<?>[]{HybridRetrievalService.class, WebSearchService.class,
+                                com.dronzer.aisearch.query.DocumentContextResolver.class},
+                        parameters);
+            }
+        }
 
         for (Field field : RetrievalOrchestrator.class.getDeclaredFields()) {
             String typeName = field.getType().getSimpleName();
@@ -497,7 +512,7 @@ class RetrievalOrchestratorTest {
     }
 
     @Test
-    void retrievalQuery_usesOriginalQueryWhenNormalizedQueryPresent() {
+    void retrievalQuery_usesNormalizedQueryWhenPresent() {
         SourcePlan plan = plan(List.of(SourceRequirement.required(KnowledgeSource.DOCUMENT)),
                 false, false, FallbackPolicy.FAIL_FAST);
         stubDocuments(List.of(docResult(1L, 0, "doc one")));
@@ -506,9 +521,26 @@ class RetrievalOrchestratorTest {
 
         orchestrator.retrieve(plan, rewritten, EMAIL);
 
+        verify(documentRetrieval).retrieve(eq("rewritten standalone form"),
+                eq(RetrievalOrchestrator.DEFAULT_DOCUMENT_CANDIDATE_LIMIT), eq(EMAIL));
+        verify(documentRetrieval, never()).retrieve(eq(QUESTION),
+                anyInt(), anyString());
+    }
+
+    @Test
+    void retrievalQuery_ignoresNormalizedValueWhenInterpretationIsAmbiguous() {
+        SourcePlan plan = plan(List.of(SourceRequirement.required(KnowledgeSource.DOCUMENT)),
+                false, false, FallbackPolicy.FAIL_FAST);
+        stubDocuments(List.of(docResult(1L, 0, "doc one")));
+        InterpretedQuery ambiguous = new InterpretedQuery(QUESTION)
+                .withNormalizedQuery("untrusted normalized form")
+                .withInterpretationStatus(InterpretationStatus.AMBIGUOUS);
+
+        orchestrator.retrieve(plan, ambiguous, EMAIL);
+
         verify(documentRetrieval).retrieve(eq(QUESTION),
                 eq(RetrievalOrchestrator.DEFAULT_DOCUMENT_CANDIDATE_LIMIT), eq(EMAIL));
-        verify(documentRetrieval, never()).retrieve(eq("rewritten standalone form"),
+        verify(documentRetrieval, never()).retrieve(eq("untrusted normalized form"),
                 anyInt(), anyString());
     }
 

@@ -2,6 +2,7 @@ package com.dronzer.aisearch.service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -106,8 +107,25 @@ public class HybridRetrievalService {
             String question,
             int candidateLimit,
             String email) {
-        List<SemanticSearchResult> semantic =
-                documentService.searchSemantically(question, candidateLimit, email);
+        return retrieve(question, candidateLimit, email, Set.of());
+    }
+
+    /**
+     * Retrieves hybrid candidates with an optional document constraint. IDs must have
+     * been validated for {@code email}; this method never changes tenant identity.
+     */
+    public List<SemanticSearchResult> retrieve(
+            String question,
+            int candidateLimit,
+            String email,
+            Set<Long> documentIds) {
+        List<SemanticSearchResult> semantic;
+        if (documentIds == null || documentIds.isEmpty()) {
+            semantic = documentService.searchSemantically(question, candidateLimit, email);
+        } else {
+            semantic = documentService.searchSemantically(
+                    question, candidateLimit, email, documentIds);
+        }
 
         if (!keywordSearchEnabled || candidateLimit <= 0) {
             return semantic;
@@ -115,8 +133,14 @@ public class HybridRetrievalService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        List<KeywordSearchResult> keyword =
-                keywordSearchRepository.findMatches(user.getId(), question, candidateLimit);
+        List<KeywordSearchResult> keyword;
+        if (documentIds == null || documentIds.isEmpty()) {
+            keyword = keywordSearchRepository.findMatches(
+                    user.getId(), question, candidateLimit);
+        } else {
+            keyword = keywordSearchRepository.findMatches(
+                    user.getId(), question, candidateLimit, documentIds);
+        }
 
         return ranker.rank(candidateMerger.merge(semantic, keyword),
                 semanticWeight, keywordWeight);

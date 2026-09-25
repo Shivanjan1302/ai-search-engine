@@ -5,6 +5,9 @@ import com.dronzer.aisearch.dto.RagOrigin;
 import com.dronzer.aisearch.dto.SemanticSearchResult;
 import com.dronzer.aisearch.dto.WebSearchResponse;
 import com.dronzer.aisearch.dto.WebSearchResult;
+import com.dronzer.aisearch.query.ConversationContext;
+import com.dronzer.aisearch.query.InterpretedQuery;
+import com.dronzer.aisearch.query.InterpretationStatus;
 import com.dronzer.aisearch.service.HybridRetrievalService;
 import com.dronzer.aisearch.service.WebSearchService;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,7 +62,86 @@ class ProductionRagPipelineTest {
         verify(documents).retrieve(anyString(), eq(20), eq(EMAIL));
         verify(web, never()).search(anyString(), org.mockito.ArgumentMatchers.anyInt());
     }
+    @Test
+    void interpreterResolvesFollowUpBeforePlanningAndRetrievalButGenerationKeepsOriginal() {
+        when(documents.retrieve(anyString(), eq(20), eq(EMAIL)))
+                .thenReturn(List.of(new SemanticSearchResult(
+                        12L, "contract.pdf", 0, "Termination clause content", 0.9)));
+        ArgumentCaptor<String> retrievalQuery = ArgumentCaptor.forClass(String.class);
+        GroundedGenerator.GenerationRequest[] generationRequest = new GroundedGenerator.GenerationRequest[1];
+        ConversationContext context = ConversationContext.fromRecentTurns(List.of(
+                new ConversationContext.Turn("user", "What are the main risks in contract.pdf?"),
+                new ConversationContext.Turn("assistant", "The contract has several risks.")));
 
+        GroundedGenerator generator = request -> {
+            generationRequest[0] = request;
+            return new GenerationResult("Answer [E1]", false, Optional.empty(), Optional.empty(),
+                    List.of(new ContextPiece(documentEvidence())), Optional.empty(), Optional.empty());
+        };
+        ProductionRagPipeline pipeline = new ProductionRagPipeline(
+                new com.dronzer.aisearch.query.DefaultQueryInterpreter(),
+                DefaultSourcePlanner.create(), new RetrievalOrchestrator(documents, web),
+                new LexicalReranker(), new DefaultContextBuilder(), DefaultEvidencePolicy.create(),
+                generator, new DefaultCitationValidator(), new DefaultProvenanceAssembler());
+
+        pipeline.execute("What about termination?", EMAIL, Optional.of(context));
+
+        verify(documents).retrieve(retrievalQuery.capture(), eq(20), eq(EMAIL));
+        assertThat(retrievalQuery.getValue()).contains("termination", "contract.pdf");
+        assertThat(generationRequest[0].userQuery()).isEqualTo("What about termination?");
+        assertThat(generationRequest[0].normalizedQuery()).isPresent();
+        assertThat(generationRequest[0].normalizedQuery().orElseThrow())
+                .contains("termination", "contract.pdf");
+        assertThat(generationRequest[0].conversationContext()).contains(context);
+    }
+
+
+
+
+    @Test
+    void explicitOrdinalDeclarationResolvesInProductionRetrieval() {
+        SourcePlanner planner = mock(SourcePlanner.class);
+        SourcePlan plan = new SourcePlan(
+                List.of(SourceRequirement.required(KnowledgeSource.DOCUMENT)),
+                false, false, EvidenceRequirement.STRICT, FallbackPolicy.FAIL_FAST);
+        when(planner.plan(any())).thenReturn(plan);
+        when(documents.retrieve(anyString(), eq(20), eq(EMAIL)))
+                .thenReturn(List.of(new SemanticSearchResult(
+                        13L, "contract.pdf", 0, "Liability clause content", 0.9)));
+        ConversationContext context = ConversationContext.fromRecentTurns(List.of(
+                new ConversationContext.Turn("assistant",
+                        "The main risks are termination, liability, confidentiality."),
+                new ConversationContext.Turn("user", "The second one is liability.")));
+
+        pipelineWithPlanner(planner).execute("What about the second one?", EMAIL, Optional.of(context));
+
+        verify(documents).retrieve("What about liability?", 20, EMAIL);
+    }
+
+    @Test
+    void ambiguousConversationReferenceRemainsUnresolvedThroughTheProductionPipeline() {
+        SourcePlanner planner = mock(SourcePlanner.class);
+        SourcePlan plan = new SourcePlan(
+                List.of(SourceRequirement.required(KnowledgeSource.DOCUMENT)),
+                false, false, EvidenceRequirement.STRICT, FallbackPolicy.FAIL_FAST);
+        when(planner.plan(any())).thenReturn(plan);
+        when(documents.retrieve(anyString(), eq(20), eq(EMAIL))).thenReturn(List.of());
+        ArgumentCaptor<InterpretedQuery> plannedQuery = ArgumentCaptor.forClass(InterpretedQuery.class);
+        ConversationContext context = ConversationContext.fromRecentTurns(List.of(
+                new ConversationContext.Turn("user", "Tell me about Contract A."),
+                new ConversationContext.Turn("assistant", "Contract A contains termination provisions."),
+                new ConversationContext.Turn("user", "Tell me about Contract B."),
+                new ConversationContext.Turn("assistant", "Both contain termination-related provisions.")));
+
+        pipelineWithPlanner(planner).execute("What about it?", EMAIL, Optional.of(context));
+
+        verify(planner).plan(plannedQuery.capture());
+        assertThat(plannedQuery.getValue().originalQuery()).isEqualTo("What about it?");
+        assertThat(plannedQuery.getValue().interpretationStatus())
+                .isEqualTo(InterpretationStatus.AMBIGUOUS);
+        assertThat(plannedQuery.getValue().normalizedQuery()).isEmpty();
+        verify(documents).retrieve("What about it?", 20, EMAIL);
+    }
 
     @Test
     void currentQueryRetrievesWebAndPreservesProviderMetadata() {
@@ -160,6 +242,35 @@ class ProductionRagPipelineTest {
     }
 
     @Test
+    void conversationContextReachesPlannerAndGenerationWithoutChangingQuestionOrTenant() {
+        ConversationContext context = ConversationContext.fromRecentTurns(List.of(
+                new ConversationContext.Turn("user", "Earlier contract question"),
+                new ConversationContext.Turn("assistant", "Earlier answer")));
+        when(documents.retrieve(anyString(), eq(20), eq(EMAIL)))
+                .thenReturn(List.of(new SemanticSearchResult(
+                        1L, "tenant.pdf", 0, "Tenant content", 0.8)));
+        realPipeline().execute("What does my document say about termination?", EMAIL, Optional.of(context));
+
+        assertThat(context.conversationId()).isEmpty();
+        assertThat(context.recentTurns()).extracting(ConversationContext.Turn::content)
+                .containsExactly("Earlier contract question", "Earlier answer");
+        // The query is not rewritten in Stage 3 and tenant identity is not stored
+        // in ConversationContext; retrieval still receives EMAIL above.
+        verify(documents).retrieve("What does my document say about termination?", 20, EMAIL);
+    }
+
+    @Test
+    void absentConversationContextIsNotCreatedByPipeline() {
+        when(documents.retrieve(anyString(), eq(20), eq(EMAIL)))
+                .thenReturn(List.of(new SemanticSearchResult(
+                        1L, "tenant.pdf", 0, "Tenant content", 0.8)));
+
+        realPipeline().execute("What does my document say about termination?", EMAIL);
+
+        verify(documents).retrieve("What does my document say about termination?", 20, EMAIL);
+    }
+
+    @Test
     void everyStageIsInvokedExactlyOnceWithTheSameEvidence() {
         SourcePlanner planner = mock(SourcePlanner.class);
         RetrievalOrchestrator retrieval = mock(RetrievalOrchestrator.class);
@@ -189,7 +300,14 @@ class ProductionRagPipelineTest {
         ValidationResult validated = new ValidationResult(
                 true, false, "valid", Optional.of(List.of()));
 
-        when(planner.plan(any())).thenReturn(plan);
+        ConversationContext context = ConversationContext.fromRecentTurns(List.of(
+                new ConversationContext.Turn("user", "Earlier question"),
+                new ConversationContext.Turn("assistant", "Earlier answer")));
+        ArgumentCaptor<InterpretedQuery> plannedQuery = ArgumentCaptor.forClass(InterpretedQuery.class);
+        ArgumentCaptor<GroundedGenerator.GenerationRequest> generationRequest =
+                ArgumentCaptor.forClass(GroundedGenerator.GenerationRequest.class);
+
+        when(planner.plan(plannedQuery.capture())).thenReturn(plan);
         when(retrieval.retrieve(eq(plan), any(), eq(EMAIL))).thenReturn(retrieved);
         when(reranker.rerank(anyString(), eq(retrieved.evidence()), eq(null))).thenReturn(reranked);
         when(builder.build(anyString(), eq(retrieved.evidence()), eq(Optional.of(reranked)), any()))
@@ -204,13 +322,17 @@ class ProductionRagPipelineTest {
 
         ProductionRagPipeline pipeline = new ProductionRagPipeline(
                 planner, retrieval, reranker, builder, policy, generator, citations, provenance);
-        pipeline.execute("What does my document say?", EMAIL);
+        pipeline.execute("What does my document say?", EMAIL, Optional.of(context));
 
+        assertThat(plannedQuery.getValue().originalQuery()).isEqualTo("What does my document say?");
+        assertThat(plannedQuery.getValue().conversationContext()).contains(context);
         verify(retrieval, times(1)).retrieve(eq(plan), any(), eq(EMAIL));
         verify(reranker, times(1)).rerank(anyString(), eq(retrieved.evidence()), eq(null));
         verify(builder, times(1)).build(anyString(), eq(retrieved.evidence()), any(), any());
         verify(policy, times(1)).evaluate(anyString(), eq(List.of(evidence)), eq(plan), eq(List.of()));
-        verify(generator, times(1)).generate(any());
+        verify(generator, times(1)).generate(generationRequest.capture());
+        assertThat(generationRequest.getValue().conversationContext()).contains(context);
+        assertThat(generationRequest.getValue().userQuery()).isEqualTo("What does my document say?");
         verify(citations, times(1)).validate(anyString(), eq("Answer [E1]"), any(), any());
         verify(provenance, times(1)).assemble(any(), any(), any(), any(), any(), any(), any());
     }

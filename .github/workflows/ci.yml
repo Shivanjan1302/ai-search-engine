@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Normal PR/push CI never requires provider credentials or a database.
+# Optional jobs below are opt-in only.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Backend tests (no credentials required)
+        run: ./mvnw --batch-mode clean test -q
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend unit tests
+        run: npm test
+
+      - name: Frontend build
+        run: npm run build
+
+  # Opt-in only. Requires a Docker daemon (available on GitHub-hosted runners).
+  # Enables the pgvector/pg16 Testcontainers integration tests.
+  integration-pgvector:
+    name: PostgreSQL / pgvector integration tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Run pgvector integration tests
+        env:
+          RUN_PGVECTOR_TESTS: 'true'
+        run: ./mvnw --batch-mode test -Dtest='*IntegrationTest' -DfailIfNoSpecifiedTests=false
+
+  # Opt-in only. Requires the TAVILY_API_KEY repository secret.
+  # Never runs on pull_request or push.
+  live-tavily:
+    name: Live Tavily provider tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Run live Tavily tests
+        env:
+          RUN_TAVILY_INTEGRATION_TESTS: 'true'
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: ./mvnw --batch-mode test -Dtest='TavilyWebSearchLiveIntegrationTest' -DfailIfNoSpecifiedTests=false
