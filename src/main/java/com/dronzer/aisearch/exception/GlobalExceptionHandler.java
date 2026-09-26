@@ -22,6 +22,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import jakarta.validation.ConstraintViolationException;
 
 import com.dronzer.aisearch.dto.ApiErrorResponse;
+import com.dronzer.aisearch.rag.GenerationException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -218,11 +219,54 @@ public class GlobalExceptionHandler {
             GeminiUpstreamException exception,
             HttpServletRequest request) {
 
+        return geminiErrorResponse(exception, request);
+    }
+
+    /**
+     * Grounded generation wraps provider failures in a {@link GenerationException}.
+     * The upstream Gemini status is recovered from the cause chain so the
+     * provider failure stays observable; any other cause keeps the previous
+     * generic 500 behaviour.
+     */
+    @ExceptionHandler(GenerationException.class)
+    public ResponseEntity<ApiErrorResponse> handleGenerationFailure(
+            GenerationException exception,
+            HttpServletRequest request) {
+
+        GeminiUpstreamException geminiFailure = findGeminiFailure(exception);
+        if (geminiFailure != null) {
+            return geminiErrorResponse(geminiFailure, request);
+        }
+
+        log.error("Grounded generation failed while processing {} {}",
+                request.getMethod(), request.getRequestURI(), exception);
+
+        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR, UNEXPECTED_ERROR_MESSAGE, request);
+    }
+
+    private ResponseEntity<ApiErrorResponse> geminiErrorResponse(
+            GeminiUpstreamException exception,
+            HttpServletRequest request) {
+
+        log.warn("Gemini upstream failure with status {} while processing {} {}",
+                exception.upstreamStatus(), request.getMethod(), request.getRequestURI());
+
         return errorResponse(
-                HttpStatus.BAD_GATEWAY,
+                exception.applicationStatus(),
                 exception.getMessage(),
                 request,
-                GeminiUpstreamException.CODE);
+                exception.code());
+    }
+
+    private GeminiUpstreamException findGeminiFailure(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof GeminiUpstreamException geminiFailure) {
+                return geminiFailure;
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return null;
     }
 
     @ExceptionHandler(WebSearchUpstreamException.class)

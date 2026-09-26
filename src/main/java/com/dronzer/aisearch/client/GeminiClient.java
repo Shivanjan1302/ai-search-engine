@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import com.dronzer.aisearch.dto.gemini.Content;
@@ -97,12 +98,14 @@ public class GeminiClient implements AIClient {
                     HttpMethod.POST,
                     new HttpEntity<>(request, headers),
                     JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            throw new GeminiUpstreamException(exception.getStatusCode().value());
         } catch (RestClientException exception) {
             throw new GeminiUpstreamException();
         }
 
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-            throw new GeminiUpstreamException();
+            throw new GeminiUpstreamException(response.getStatusCode().value());
         }
 
         return response.getBody();
